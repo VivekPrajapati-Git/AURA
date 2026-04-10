@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-const NODE_BASE = "http://127.0.0.1:5000";
+const NODE_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // GET /api/chat/[chatId]/message/[messageId]
 // Proxies to Node: GET /chat/:chatId/message/:messageId

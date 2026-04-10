@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 
-const NODE_BASE = "http://127.0.0.1:5000";
+const NODE_BASE = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 // GET /api/chat/stream/[chatId]?message=...
 // Proxies the Node SSE stream to the browser transparently
