@@ -145,7 +145,9 @@ def compute_context_contributions(
     for full_text, label in context_items:
         item_emb = embed(full_text)
         score    = cosine_similarity(response_emb, item_emb)
-        results.append({"label": label, "score": round(float(score), 4)})
+        # Clamp score to [0, 1] range (cosine sim can be negative)
+        score    = max(0.0, min(1.0, float(score)))
+        results.append({"label": label, "score": round(score, 4)})
 
     results.sort(key=lambda x: x["score"], reverse=True)
     return results[:5]
@@ -165,8 +167,8 @@ def compute_factual_grounding(
     """
     chunks = []
 
-    chunks += user_context.skills
-    chunks += user_context.goals
+    chunks += user_context.interests
+    chunks += user_context.background
     chunks += user_context.constraints
 
     for turn in history[-3:]:
