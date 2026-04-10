@@ -7,12 +7,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "chatId and message are required." }, { status: 400 });
   }
 
-  const chat = getChat(body.chatId);
+  const chat = await getChat(body.chatId);
   if (!chat) {
     return NextResponse.json({ error: "Chat not found." }, { status: 404 });
   }
 
-  const result = addUserMessageAndAssistantResponse(body.chatId, body.message);
+  const result = await addUserMessageAndAssistantResponse(body.chatId, body.message);
   if (!result) {
     return NextResponse.json({ error: "Unable to add message." }, { status: 500 });
   }

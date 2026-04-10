@@ -24,12 +24,21 @@ from pipeline.bias_detector import detect_bias
 import uvicorn
 
 
-# ── Lifespan ──────────────────────────────────────────────────────────────────
+# ── Lifespan (pre-load models once on startup) ────────────────────────────────
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    print("AURA AI engine starting...")
-    print("All pipeline modules loaded.")
+    print("AURA AI service starting — pre-loading models...")
+
+    # Pre-load the zero-shot intent classifier into memory (takes ~15s first run)
+    from pipeline.intent_classifier import get_classifier
+    get_classifier()
+
+    # Pre-load spaCy NER model
+    from pipeline.context_encoder import get_nlp
+    get_nlp()
+
+    print("AURA AI service ready ✓")
     yield
     print("AURA AI engine shutting down...")
 
@@ -45,9 +54,9 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins  = ["http://localhost:3000"],
-    allow_methods  = ["*"],
-    allow_headers  = ["*"],
+    allow_origins=["http://localhost:3000", "http://localhost:5000"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 
@@ -63,101 +72,107 @@ async def health():
 @app.post("/ai/infer", response_model=InferResponse)
 async def infer(req: InferRequest):
     try:
+        # ── Step 1: Classify intent ───────────────────────────────────────────
+        from pipeline.intent_classifier import classify_intent
+        intent, intent_confidence, top3_intents = classify_intent(req.message)
 
-        # ── Step 1: Extract entities + update context ─────────────────────────
-        entities    = extract_entities(req.message)
-        user_context= update_user_context(req.user_context, entities)
+        # ── Step 2: Encode conversation history ───────────────────────────────
+        from pipeline.context_encoder import encode_history, extract_entities, update_user_context
         encoded_history = encode_history(req.history)
 
-        # ── Step 2: Classify intent ───────────────────────────────────────────
-        intent, intent_confidence, top3 = classify_intent(req.message)
+        # Enrich user_context with entities extracted from the current message
+        extracted = extract_entities(req.message)
+        enriched_context = update_user_context(req.user_context, extracted)
 
-        # ── Step 3: LLM reasoning ─────────────────────────────────────────────
-        parsed = run_llm(
+        # ── Step 3: Call LLM (HuggingFace) ───────────────────────────────────
+        from pipeline.llm_reasoner import run_llm
+        llm_out = run_llm(
             message         = req.message,
             history         = req.history,
-            user_context    = user_context,
+            user_context    = enriched_context,
             intent          = intent,
-            encoded_history = encoded_history
+            encoded_history = encoded_history,
         )
+        # llm_out: ParsedLLMOutput { reasoning, response, confidence, caveats }
 
-        # ── Step 4: XAI data ──────────────────────────────────────────────────
-        xai_data = build_xai_data(
+        # ── Step 4: Bias detection (runs all 4 checks in parallel) ───────────
+        from pipeline.bias_detector import detect_bias
+        bias_score: BiasScore = detect_bias(req.message, llm_out.response)
+
+        # ── Step 5: XAI — build explainability data ───────────────────────────
+        from pipeline.xai_module import build_xai_data
+        xai_data: XAIData = build_xai_data(
             message      = req.message,
-            response     = parsed.response,
-            reasoning    = parsed.reasoning,
+            response     = llm_out.response,
+            reasoning    = llm_out.reasoning,
             intent       = intent,
-            user_context = user_context,
-            history      = req.history
+            user_context = enriched_context,
+            history      = req.history,
         )
 
-        # ── Step 5: Bias detection ────────────────────────────────────────────
-        bias_score = detect_bias(req.message, parsed.response)
+        # ── Step 6: Reliability scoring ───────────────────────────────────────
+        from pipeline.context_encoder import compute_factual_grounding
+        from pipeline.xai_module import compute_response_quality
 
-        # ── Step 6: Neutralized response if flagged ───────────────────────────
-        neutralized = None
-        if bias_score.flagged:
-            neutralized = run_neutralized(
-                message      = req.message,
-                original     = parsed,
-                intent       = intent,
-                user_context = user_context
-            )
-
-        # ── Step 7: Reliability score ─────────────────────────────────────────
         factual_grounding = compute_factual_grounding(
-            response     = parsed.response,
-            user_context = user_context,
-            history      = req.history
+            llm_out.response, enriched_context, req.history
         )
-        intent_alignment = compute_intent_alignment(parsed.response, intent)
-        bias_penalty     = round(1.0 - bias_score.composite, 4)
-
-        overall = round(
-            0.25 * intent_confidence  +
-            0.25 * parsed.confidence  +
+        llm_quality = compute_response_quality(
+            req.message, llm_out.response, intent, llm_out.reasoning
+        )
+        bias_penalty    = round(1.0 - bias_score.composite, 4)
+        overall         = round(
+            0.25 * intent_confidence +
+            0.25 * llm_out.confidence +
             0.25 * factual_grounding  +
             0.25 * bias_penalty,
             4
         )
-
-        label = (
-            "green" if overall >= 0.75 else
-            "amber" if overall >= 0.55 else
-            "red"
-        )
+        if overall >= 0.70:
+            rel_label = "green"
+        elif overall >= 0.45:
+            rel_label = "amber"
+        else:
+            rel_label = "red"
 
         reliability = ReliabilityScore(
-            overall           = overall,
-            intent_confidence = intent_confidence,
-            llm_confidence    = parsed.confidence,
-            factual_grounding = factual_grounding,
-            bias_penalty      = bias_penalty,
-            label             = label
+            overall            = overall,
+            intent_confidence  = intent_confidence,
+            llm_confidence     = llm_out.confidence,
+            factual_grounding  = factual_grounding,
+            bias_penalty       = bias_penalty,
+            label              = rel_label,
         )
 
-        # ── Step 8: Caveat injection ──────────────────────────────────────────
-        caveat = None
-        if parsed.confidence < 0.5:
-            caveat = "I am not fully certain about this — please verify with a professional advisor."
-        elif parsed.caveats:
-            caveat = parsed.caveats
+        # ── Step 7: Neutralized response (only if flagged for bias) ───────────
+        neutralized_response = None
+        if bias_score.flagged:
+            try:
+                from pipeline.llm_reasoner import run_neutralized
+                neutralized_response = run_neutralized(
+                    req.message, llm_out, intent, enriched_context
+                )
+            except Exception as ne:
+                print(f"[neutralize] skipped: {ne}")
 
-        # ── Return ────────────────────────────────────────────────────────────
+        # ── Assemble final response ───────────────────────────────────────────
         return InferResponse(
-            response             = parsed.response,
-            reasoning            = parsed.reasoning,
+            response             = llm_out.response,
+            reasoning            = llm_out.reasoning,
             intent               = intent,
-            confidence           = parsed.confidence,
+            confidence           = llm_out.confidence,
             xai_data             = xai_data,
             bias_score           = bias_score,
             reliability          = reliability,
-            neutralized_response = neutralized,
-            caveat               = caveat,
-            session_id           = req.session_id
+            neutralized_response = neutralized_response,
+            caveat               = llm_out.caveats or None,
+            session_id           = req.session_id,
         )
 
+
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 

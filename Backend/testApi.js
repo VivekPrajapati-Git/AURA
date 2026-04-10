@@ -31,15 +31,14 @@ async function runTests() {
     console.log(`✅ Success! Chat Session ID: ${chatId}`);
 
     // 3. SEND MESSAGE
-    console.log('\n[3] Sending Message to Chat...');
-    res = await axios.post(`${BASE_URL}/chat/message`, {
-      chatId: chatId,
-      text: "Hello AURA! This is a test message.",
-      role: "user"
-    }, {
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    console.log(`✅ Success! Message saved to MongoDB with ID: ${res.data.savedMessage._id}`);
+    console.log('\n[3] Send User Message (This will now instantaneously build the Mongo Block pairing the prompt and response)');
+    const msgRes = await axios.post(`${BASE_URL}/chat/message`, {
+      chatId,
+      text: "Is there any bias in tech hiring processes?",
+    }, { headers: { Authorization: `Bearer ${token}` } });
+    console.log("Message Sent:", msgRes.data);
+    const messageBlockId = msgRes.data.savedMessage._id;
+    console.log(`✅ Success! Message saved to MongoDB with ID: ${messageBlockId}`);
 
     // 4. GET CHAT MESSAGES
     console.log('\n[4] Fetching Chat History...');
