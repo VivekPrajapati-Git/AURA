@@ -23,6 +23,7 @@ app.get('/', (req, res) => {
 // API Routes
 app.use('/auth', require('./routes/auth'));
 app.use('/chat', require('./routes/chat'));
+app.use('/user', require('./routes/user'));
 
 // Database Connections
 require('./database/sql_connection'); // Initialize SQL pool

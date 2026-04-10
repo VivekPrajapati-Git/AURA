@@ -131,3 +131,123 @@ exports.getUserChats = async (req, res) => {
     res.status(500).json({ error: 'Server Error fetching chat list' });
   }
 };
+
+// 5. Update Chat Title
+exports.updateChatTitle = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { title } = req.body;
+    const userId = req.user.id;
+
+    const connection = await pool.getConnection();
+    const [result] = await connection.query(
+      "UPDATE sessions SET title = ? WHERE id = ? AND user_id = ?",
+      [title, chatId, userId]
+    );
+    connection.release();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Chat not found or unauthorized' });
+    }
+
+    res.status(200).json({ message: 'Title updated successfully', title });
+  } catch (err) {
+    res.status(500).json({ error: 'Server Error updating title' });
+  }
+};
+
+// 6. Delete Chat
+exports.deleteChat = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const userId = req.user.id;
+
+    const connection = await pool.getConnection();
+    const [result] = await connection.query(
+      "DELETE FROM sessions WHERE id = ? AND user_id = ?",
+      [chatId, userId]
+    );
+    connection.release();
+
+    if (result.affectedRows === 0) {
+      return res.status(404).json({ error: 'Chat not found or unauthorized' });
+    }
+
+    // Delete associated messages in MongoDB
+    await Message.deleteMany({ sessionId: chatId });
+
+    res.status(200).json({ message: 'Chat deleted successfully' });
+  } catch (err) {
+    res.status(500).json({ error: 'Server Error deleting chat' });
+  }
+};
+
+// 7. Get Message by ID
+exports.getMessageById = async (req, res) => {
+  try {
+    const { chatId, messageId } = req.params;
+    const message = await Message.findOne({ _id: messageId, sessionId: chatId });
+    
+    if (!message) return res.status(404).json({ error: 'Message not found' });
+    res.status(200).json(message);
+  } catch (err) {
+    res.status(500).json({ error: 'Server Error fetching message' });
+  }
+};
+
+// 8. Stream AI Response (SSE)
+exports.streamMessage = async (req, res) => {
+  try {
+    const { chatId } = req.params;
+    const { text } = req.body; // user's prompt
+
+    // 1. Save User Message immediately
+    const userMsg = new Message({ sessionId: chatId, role: 'user', text });
+    await userMsg.save();
+
+    // 2. Setup Server-Sent Events headers
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.flushHeaders();
+
+    // 3. Simulate AI typing (replace with real LLM stream later)
+    const fakeResponse = "This is a simulated streaming response from the AURA system! Your message has been analyzed.".split(" ");
+    let partialText = "";
+
+    for (let i = 0; i < fakeResponse.length; i++) {
+        partialText += (i === 0 ? "" : " ") + fakeResponse[i];
+        res.write(`data: ${JSON.stringify({ chunk: fakeResponse[i] + " " })}\n\n`);
+        await new Promise(r => setTimeout(r, 100)); // artificially slow it down
+    }
+
+    // 4. Save Final AI Message to MongoDB
+    const aiMsg = new Message({
+        sessionId: chatId,
+        role: 'system',
+        text: partialText,
+        confidence: { overall: 98, llm: 95, intent: 98, coverage: 100 }
+    });
+    await aiMsg.save();
+
+    // Tell client we are done
+    res.write('data: [DONE]\n\n');
+    res.end();
+  } catch (err) {
+    res.write('data: [ERROR]\n\n');
+    res.end();
+  }
+};
+
+// 9. Get Message Metrics
+exports.getMessageMetrics = async (req, res) => {
+  try {
+    const { messageId } = req.params;
+    const message = await Message.findById(messageId, 'confidence biasScore readability xai');
+    
+    if (!message) return res.status(404).json({ error: 'Metrics not found' });
+    res.status(200).json(message);
+  } catch (err) {
+    res.status(500).json({ error: 'Server Error fetching metrics' });
+  }
+};
