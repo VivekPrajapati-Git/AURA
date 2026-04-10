@@ -114,12 +114,15 @@ exports.sendMessage = async (req, res) => {
     
     await newMessageBlock.save();
 
-    // ── Update SQL session stats ────────────────────────────────────────────────
+    // ── Update SQL session stats + auto-set title on first message ──────────────
     const conn2 = await pool.getConnection();
-    await conn2.query(
-      "UPDATE sessions SET message_count = message_count + 2, last_active = CURRENT_TIMESTAMP WHERE id = ?",
-      [chatId]
-    );
+    const [curSession] = await conn2.query("SELECT message_count, title FROM sessions WHERE id = ?", [chatId]);
+    const isFirst = curSession.length > 0 && (!curSession[0].title || curSession[0].message_count === 0);
+    if (isFirst) {
+      await conn2.query("UPDATE sessions SET title = ?, message_count = message_count + 2, last_active = CURRENT_TIMESTAMP WHERE id = ?", [text.substring(0, 50), chatId]);
+    } else {
+      await conn2.query("UPDATE sessions SET message_count = message_count + 2, last_active = CURRENT_TIMESTAMP WHERE id = ?", [chatId]);
+    }
     conn2.release();
 
     res.status(200).json({ 
@@ -172,7 +175,7 @@ exports.getUserChats = async (req, res) => {
 
     const connection = await pool.getConnection();
     const [sessions] = await connection.query(
-      "SELECT id, created_at, last_active, message_count FROM sessions WHERE user_id = ? ORDER BY last_active DESC",
+      "SELECT id, title, created_at, last_active, message_count FROM sessions WHERE user_id = ? ORDER BY last_active DESC",
       [requestedUserId]
     );
     connection.release();
@@ -320,6 +323,17 @@ exports.streamMessage = async (req, res) => {
     blockMsg.xai                   = xaiMapped;
     blockMsg.contextContributions  = (aiResult.xai_data?.context_contributions || []);
     await blockMsg.save();
+
+    // 6b. Update SQL session stats + auto-set title on first message
+    const conn2 = await pool.getConnection();
+    const [curSession] = await conn2.query("SELECT message_count, title FROM sessions WHERE id = ?", [chatId]);
+    const isFirst = curSession.length > 0 && (!curSession[0].title || curSession[0].message_count === 0);
+    if (isFirst) {
+      await conn2.query("UPDATE sessions SET title = ?, message_count = message_count + 2, last_active = CURRENT_TIMESTAMP WHERE id = ?", [text.substring(0, 50), chatId]);
+    } else {
+      await conn2.query("UPDATE sessions SET message_count = message_count + 2, last_active = CURRENT_TIMESTAMP WHERE id = ?", [chatId]);
+    }
+    conn2.release();
 
     // 7. Send final metadata so client can update metrics without a refetch
     res.write(`data: ${JSON.stringify({ done: true, messageId: blockMsg._id, metrics: {

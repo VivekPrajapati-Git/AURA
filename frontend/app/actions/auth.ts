@@ -25,6 +25,7 @@ export async function loginUser(prevState: any, formData: FormData) {
     const cookieStore = await cookies();
     cookieStore.set('aura-token', data.token, { secure: true, httpOnly: true, path: '/' });
     cookieStore.set('aura-user-id', data.user.id, { secure: true, httpOnly: true, path: '/' });
+    cookieStore.set('aura-username', data.user.username || '', { secure: true, path: '/' });
 
   } catch (err) {
     return { error: 'Network error communicating with the backend' };
@@ -55,6 +56,7 @@ export async function registerUser(prevState: any, formData: FormData) {
     const cookieStore = await cookies();
     cookieStore.set('aura-token', data.token, { secure: true, httpOnly: true, path: '/' });
     cookieStore.set('aura-user-id', data.user.id, { secure: true, httpOnly: true, path: '/' });
+    cookieStore.set('aura-username', data.user.username || '', { secure: true, path: '/' });
 
   } catch (err) {
     return { error: 'Network error communicating with the backend' };
@@ -67,5 +69,6 @@ export async function logoutUser() {
   const cookieStore = await cookies();
   cookieStore.delete('aura-token');
   cookieStore.delete('aura-user-id');
+  cookieStore.delete('aura-username');
   redirect('/login');
 }

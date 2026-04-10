@@ -7,5 +7,6 @@ const auth = require('../middleware/auth');
 router.use(auth);
 
 router.get('/:userId/stats', userController.getUserStats);
+router.get('/:userId/profile', userController.getUserProfile);
 
 module.exports = router;
