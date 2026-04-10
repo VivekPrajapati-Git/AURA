@@ -39,7 +39,7 @@ exports.createChat = async (req, res) => {
 // 2. Send Message
 exports.sendMessage = async (req, res) => {
   try {
-    const { chatId, text, role } = req.body;
+    const { chatId, text } = req.body;
     const userId = req.user.id;
 
     // Verify session belongs to user
@@ -51,29 +51,31 @@ exports.sendMessage = async (req, res) => {
       return res.status(404).json({ error: 'Chat not found or unauthorized' });
     }
 
-    // Save message to MongoDB
-    const newMessage = new Message({
+    const fakeAiOutput = "I have queried the underlying SQL and MongoDB engines. This is securely mapped through real routing!";
+
+    // Save Unified Message Block to MongoDB
+    const newMessageBlock = new Message({
       sessionId: chatId,
-      role: role || "user",
-      text: text,
-      // Defaulting analytics for now
+      userPrompt: text,
+      systemResponse: fakeAiOutput,
+      // Defaulting analytics for the AI turn
       confidence: { overall: 95, llm: 90, intent: 99, coverage: 100 },
       biasScore: 5,
       readability: { score: 80, level: "Easy" }
     });
     
-    await newMessage.save();
+    await newMessageBlock.save();
 
-    // Update SQL message_count & last_active
+    // Update SQL message_count & last_active. (User+System = 2 turns technically, but 1 block. Let's add 2 since stats rely on it)
     await connection.query(
-      "UPDATE sessions SET message_count = message_count + 1, last_active = CURRENT_TIMESTAMP WHERE id = ?",
+      "UPDATE sessions SET message_count = message_count + 2, last_active = CURRENT_TIMESTAMP WHERE id = ?",
       [chatId]
     );
     connection.release();
 
     res.status(200).json({ 
-      message: 'Message sent', 
-      savedMessage: newMessage 
+      message: 'Message Block sent', 
+      savedMessage: newMessageBlock 
     });
   } catch (err) {
     console.error(err);
@@ -201,9 +203,15 @@ exports.streamMessage = async (req, res) => {
     const { chatId } = req.params;
     const { text } = req.body; // user's prompt
 
-    // 1. Save User Message immediately
-    const userMsg = new Message({ sessionId: chatId, role: 'user', text });
-    await userMsg.save();
+    // 1. Create the unified Block with User Prompt initially
+    const blockMsg = new Message({ 
+      sessionId: chatId, 
+      userPrompt: text,
+      systemResponse: "",
+      confidence: { overall: 98, llm: 95, intent: 98, coverage: 100 },
+      biasScore: 5
+    });
+    await blockMsg.save();
 
     // 2. Setup Server-Sent Events headers
     res.setHeader('Content-Type', 'text/event-stream');
@@ -221,14 +229,9 @@ exports.streamMessage = async (req, res) => {
         await new Promise(r => setTimeout(r, 100)); // artificially slow it down
     }
 
-    // 4. Save Final AI Message to MongoDB
-    const aiMsg = new Message({
-        sessionId: chatId,
-        role: 'system',
-        text: partialText,
-        confidence: { overall: 98, llm: 95, intent: 98, coverage: 100 }
-    });
-    await aiMsg.save();
+    // 4. Save Final AI Message into the same MongoDB Block Document!
+    blockMsg.systemResponse = partialText;
+    await blockMsg.save();
 
     // Tell client we are done
     res.write('data: [DONE]\n\n');

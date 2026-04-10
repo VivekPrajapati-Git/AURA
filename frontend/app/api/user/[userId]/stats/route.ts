@@ -5,11 +5,11 @@ export async function GET(
   _request: Request,
   context: any
 ) {
-  const { userId } = context.params as { userId: string };
+  const { userId } = await (context.params as Promise<{ userId: string }>);
   if (!userId) {
     return NextResponse.json({ error: "Missing userId." }, { status: 400 });
   }
 
-  const stats = getUserStats(userId);
+  const stats = await getUserStats(userId);
   return NextResponse.json({ stats });
 }

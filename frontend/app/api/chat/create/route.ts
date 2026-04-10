@@ -7,6 +7,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing userId in request body." }, { status: 400 });
   }
 
-  const chat = createChat(body.userId, typeof body.title === "string" ? body.title : "New conversation");
+  const chat = await createChat(body.userId, typeof body.title === "string" ? body.title : "New conversation");
   return NextResponse.json({ chat });
 }

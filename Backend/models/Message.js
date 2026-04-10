@@ -11,15 +11,24 @@ const messageSchema = new mongoose.Schema({
     required: true
   },
 
-  role: {
+  userPrompt: {
     type: String,
-    enum: ["user", "system"],
     required: true
   },
 
-  text: {
+  userPromptEmbedding: {
+    type: [Number], // array of floats for vector search
+    default: []
+  },
+
+  systemResponse: {
     type: String,
-    required: true
+    default: ""
+  },
+
+  systemResponseEmbedding: {
+    type: [Number], // array of floats for vector search
+    default: []
   },
 
   timestamp: {
