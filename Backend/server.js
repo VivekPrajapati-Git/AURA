@@ -20,7 +20,13 @@ app.get('/', (req, res) => {
   res.send('AURA Backend is running!');
 });
 
-// Database Connection (Example)
+// Database Connections
+require('./sql'); // Initialize PostgreSQL pool
+const { connectRedis } = require('./redis'); // Import Redis connection helper
+
+// Connect to Redis
+connectRedis();
+
 // mongoose.connect(process.env.MONGO_URI, {
 //     useNewUrlParser: true,
 //     useUnifiedTopology: true
