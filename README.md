@@ -42,7 +42,8 @@ AURA moves securely beyond the standard "Black Box" model of LLMs. It achieves t
 
 Below is the complete data flow and architectural diagram demonstrating how the sub-systems interact, from the Next.js UI routing through the Node proxy and down to the parallel Python execution nodes. 
 
-[System Architecture](images/System Architecture.png)
+![System Architecture](images/System%20Architecture.png)
+
 ---
 
 ## ⚖️ Feasibility & Viability
