@@ -78,11 +78,18 @@ function ChatUI() {
     const loadSession = async () => {
       if (!activeChatId) { setMessages(initialWelcome); return; }
       try {
-        const res = await fetch(`/api/chat/${activeChatId}`);
-        if (!res.ok) throw new Error("Chat not found");
-        const { chat } = await res.json();
+        // cache-bust to avoid stale Next.js responses on hard refresh
+        const res = await fetch(`/api/chat/${activeChatId}?t=${Date.now()}`);
+        if (!res.ok) {
+          console.error("[loadSession] fetch failed:", res.status, await res.text());
+          throw new Error("Chat not found");
+        }
+        const data = await res.json();
+        const chat = data.chat;
+        console.log("[loadSession] loaded", chat?.messages?.length ?? 0, "messages");
         setMessages(chat?.messages?.length > 0 ? chat.messages : []);
-      } catch {
+      } catch (err) {
+        console.error("[loadSession] error:", err);
         setError("Unable to load chat history.");
       }
     };

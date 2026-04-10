@@ -118,7 +118,7 @@ const mapBackendBlock = (msg: any): ChatMessage[] => {
 
 export const createChat = async (userId: string, title = "New conversation"): Promise<Chat> => {
     const headers = await getHeaders();
-    const res = await fetch(`${BASE_URL}/chat/create`, { method: "POST", headers });
+    const res = await fetch(`${BASE_URL}/chat/create`, { method: "POST", headers, cache: 'no-store' });
     const data = await res.json();
     return {
         id: data.chatId,
@@ -132,7 +132,7 @@ export const createChat = async (userId: string, title = "New conversation"): Pr
 
 export const getChat = async (chatId: string): Promise<Chat | null> => {
     const headers = await getHeaders();
-    const res = await fetch(`${BASE_URL}/chat/${chatId}`, { headers });
+    const res = await fetch(`${BASE_URL}/chat/${chatId}`, { headers, cache: 'no-store' });
     if (!res.ok) return null;
     const data = await res.json();
 
@@ -149,7 +149,7 @@ export const getChat = async (chatId: string): Promise<Chat | null> => {
 export const listChatsForUser = async (_unusedFrontendId: string): Promise<ChatSummary[]> => {
     const headers = await getHeaders();
     const activeUserId = await getUserId();
-    const res = await fetch(`${BASE_URL}/chat/list/${activeUserId}`, { headers });
+    const res = await fetch(`${BASE_URL}/chat/list/${activeUserId}`, { headers, cache: 'no-store' });
     if (!res.ok) return [];
     const data = await res.json();
 
