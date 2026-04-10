@@ -58,10 +58,10 @@ exports.sendMessage = async (req, res) => {
       sessionId: chatId,
       userPrompt: text,
       systemResponse: fakeAiOutput,
-      // Defaulting analytics for the AI turn
-      confidence: { overall: 95, llm: 90, intent: 99, coverage: 100 },
-      biasScore: 5,
-      readability: { score: 80, level: "Easy" }
+      // Defaulting analytics for the AI turn to zeros so it doesn't inflate metrics falsely
+      confidence: { overall: 0, llm: 0, intent: 0, coverage: 0 },
+      biasScore: 0,
+      readability: { score: 0, level: "N/A" }
     });
     
     await newMessageBlock.save();
@@ -208,8 +208,8 @@ exports.streamMessage = async (req, res) => {
       sessionId: chatId, 
       userPrompt: text,
       systemResponse: "",
-      confidence: { overall: 98, llm: 95, intent: 98, coverage: 100 },
-      biasScore: 5
+      confidence: { overall: 0, llm: 0, intent: 0, coverage: 0 },
+      biasScore: 0
     });
     await blockMsg.save();
 

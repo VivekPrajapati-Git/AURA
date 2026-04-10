@@ -41,52 +41,23 @@ export type UserStats = {
   topChats: ChatSummary[];
 };
 
-const BASE_URL = "http://127.0.0.1:5000";
-let CACHED_TOKEN = "";
-let CACHED_USER_ID = "";
+import { cookies } from "next/headers";
 
-// Auto-Login sequence to wire NextJS silently to Express backend Authentication
-const getAuthToken = async () => {
-    if (CACHED_TOKEN) return CACHED_TOKEN;
-    try {
-        const payload = {
-            username: "demo-user",
-            email: "nextjs_demo@test.com",
-            password: "password123"
-        };
-        
-        let res = await fetch(`${BASE_URL}/auth/register`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        
-        let data = await res.json().catch(()=>({}));
-        
-        if (data.error?.includes('exists') || !data.token) {
-           res = await fetch(`${BASE_URL}/auth/login`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ email: "nextjs_demo@test.com", password: "password123" })
-           });
-           data = await res.json();
-        }
-        
-        CACHED_TOKEN = data?.token || "";
-        CACHED_USER_ID = data?.user?.id || "";
-        return CACHED_TOKEN;
-    } catch(err) {
-        console.error("Auth Exception:", err);
-        return "";
+const BASE_URL = "http://127.0.0.1:5000";
+
+const getHeaders = async () => {
+    const cookieStore = await cookies();
+    const token = cookieStore.get('aura-token')?.value || "";
+    
+    return {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
     }
 }
 
-const getHeaders = async () => {
-    const t = await getAuthToken();
-    return {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${t}`
-    }
+const getUserId = async () => {
+    const cookieStore = await cookies();
+    return cookieStore.get('aura-user-id')?.value || "";
 }
 
 const mapBackendBlock = (msg: any): ChatMessage[] => {
@@ -108,7 +79,7 @@ const mapBackendBlock = (msg: any): ChatMessage[] => {
         role: "assistant",
         text: msg.systemResponse || "",
         bias: (msg.biasScore || 0) / 100,
-        confidence: (msg.confidence?.overall || 95) / 100, 
+        confidence: (msg.confidence?.overall || 0) / 100, 
         influences: msg.xai || [],
         createdAt: msg.timestamp || msg.created_at || new Date().toISOString()
     };
@@ -129,7 +100,7 @@ export const createChat = async (userId: string, title = "New conversation"): Pr
     const data = await res.json();
     return {
         id: data.chatId,
-        userId: CACHED_USER_ID,
+        userId: await getUserId(),
         title,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -155,7 +126,8 @@ export const getChat = async (chatId: string): Promise<Chat | null> => {
 
 export const listChatsForUser = async (_unusedFrontendId: string): Promise<ChatSummary[]> => {
     const headers = await getHeaders();
-    const res = await fetch(`${BASE_URL}/chat/list/${CACHED_USER_ID}`, { headers });
+    const activeUserId = await getUserId();
+    const res = await fetch(`${BASE_URL}/chat/list/${activeUserId}`, { headers });
     if (!res.ok) return [];
     const data = await res.json();
     
@@ -215,15 +187,16 @@ export const getMessageMetrics = async (chatId: string, messageId: string) => {
 
 export const getUserStats = async (_unusedFrontendId: string): Promise<UserStats> => {
     const headers = await getHeaders();
-    const res = await fetch(`${BASE_URL}/user/${CACHED_USER_ID}/stats`, { headers });
+    const activeUserId = await getUserId();
+    const res = await fetch(`${BASE_URL}/user/${activeUserId}/stats`, { headers });
     const data = await res.json().catch(()=>({}));
     
     return {
-      userId: CACHED_USER_ID,
+      userId: activeUserId,
       chatCount: 1, // Optional calculation
       messageCount: data.total_messages || 0,
       averageBias: data.overall_bias || 0,
-      averageConfidence: data.level || 0.94, 
+      averageConfidence: data.level || 0, 
       topChats: []
     }
 };
