@@ -214,9 +214,11 @@ def run_neutralized(
         "Rewritten neutral response:"
     )
 
-    response = client.chat_completion(
+    response = client.chat.completions.create(
+        model       = os.getenv("HF_MODEL", DEFAULT_MODEL),
         messages    = [{"role": "user", "content": prompt}],
         max_tokens  = 512,
         temperature = 0.3,
     )
     return response.choices[0].message.content
+
