@@ -38,6 +38,13 @@ AURA moves securely beyond the standard "Black Box" model of LLMs. It achieves t
 
 ---
 
+## 🏗 System Architecture (Under the Hood)
+
+Below is the complete data flow and architectural diagram demonstrating how the sub-systems interact, from the Next.js UI routing through the Node proxy and down to the parallel Python execution nodes. 
+
+[System Architecture](images/System Architecture.png)
+---
+
 ## ⚖️ Feasibility & Viability
 
 **Feasibility:** Built entirely on Industry-standard Open Source models (MiniLM, DistilBERT) combined with rapid routing microservices to ensure both top-tier performance and cost viability.
