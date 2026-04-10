@@ -6,9 +6,15 @@ const mongoose = require('mongoose');
 async function testAllConnections() {
   console.log('--- Database Connection Tests ---\n');
 
-  // 1. Test Redis
+  // 1. Test Redis (Both standard and ioredis)
   try {
-    await connectRedis();
+    await connectRedis(); // tests redis_connection.js
+    
+    // Test ioredis from redis_client.js
+    const ioRedis = require('./redis_client');
+    await ioRedis.set('aura_status', 'ready');
+    const status = await ioRedis.get('aura_status');
+    console.log(`✅ ioRedis Connected Successfully (Status: ${status})`);
   } catch (error) {
     console.error('❌ Redis test failed:', error.message);
   }
