@@ -21,8 +21,8 @@ app.get('/', (req, res) => {
 });
 
 // Database Connections
-require('./sql'); // Initialize PostgreSQL pool
-const { connectRedis } = require('./redis'); // Import Redis connection helper
+require('./sql_connection'); // Initialize PostgreSQL pool
+const { connectRedis } = require('./redis_connection'); // Import Redis connection helper
 
 // Connect to Redis
 connectRedis();
