@@ -20,18 +20,21 @@ app.get('/', (req, res) => {
   res.send('AURA Backend is running!');
 });
 
+// API Routes
+app.use('/auth', require('./routes/auth'));
+app.use('/chat', require('./routes/chat'));
+
 // Database Connections
-require('./sql_connection'); // Initialize PostgreSQL pool
-const { connectRedis } = require('./redis_connection'); // Import Redis connection helper
+require('./database/sql_connection'); // Initialize PostgreSQL pool
+const { connectRedis } = require('./database/redis_connection'); // Import Redis connection helper
 
 // Connect to Redis
 connectRedis();
 
-// mongoose.connect(process.env.MONGO_URI, {
-//     useNewUrlParser: true,
-//     useUnifiedTopology: true
-// }).then(() => console.log('MongoDB Connected'))
-//   .catch(err => console.log(err));
+console.log('Connecting to MongoDB...');
+mongoose.connect(process.env.MONGO_URI)
+  .then(() => console.log('MongoDB Connected successfully!'))
+  .catch(err => console.log('MongoDB Connection error:', err));
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);

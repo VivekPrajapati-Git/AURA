@@ -1,6 +1,6 @@
 require('dotenv').config();
-const { pool } = require('./sql_connection');
-const { connectRedis } = require('./redis_connection');
+const { pool } = require('./database/sql_connection');
+const { connectRedis } = require('./database/redis_connection');
 const mongoose = require('mongoose');
 
 async function testAllConnections() {
@@ -11,7 +11,7 @@ async function testAllConnections() {
     await connectRedis(); // tests redis_connection.js
     
     // Test ioredis from redis_client.js
-    const ioRedis = require('./redis_client');
+    const { redis: ioRedis } = require('./database/redis_client');
     await ioRedis.set('aura_status', 'ready');
     const status = await ioRedis.get('aura_status');
     console.log(`✅ ioRedis Connected Successfully (Status: ${status})`);
