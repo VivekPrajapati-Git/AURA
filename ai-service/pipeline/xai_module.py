@@ -48,16 +48,18 @@ def compute_attention_summary(
     """
     all_context = []
 
-    if user_context.skills:
-        all_context.append(("skills: " + ", ".join(user_context.skills),
-                            "skills"))
-    if user_context.goals:
-        all_context.append(("goals: " + ", ".join(user_context.goals),
-                            "career goals"))
+    if user_context.interests:
+        all_context.append(("interests: " + ", ".join(user_context.interests),
+                            "interests"))
+    if user_context.background:
+        all_context.append(("background: " + ", ".join(user_context.background),
+                            "background"))
+    if user_context.knowledge_level:
+        all_context.append((user_context.knowledge_level, "knowledge_level"))
     if user_context.location:
         all_context.append((user_context.location, "location"))
     if user_context.constraints:
-        all_context.append(("experience: " + ", ".join(user_context.constraints),
+        all_context.append(("constraints: " + ", ".join(user_context.constraints),
                             "experience level"))
 
     for turn in history[-3:]:
