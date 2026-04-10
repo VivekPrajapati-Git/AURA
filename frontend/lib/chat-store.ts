@@ -11,6 +11,7 @@ export type ChatMessage = {
   text: string;
   bias: number;           // 0–1
   confidence: number;     // 0–1
+  confidenceBreakdown?: { llm: number; intent: number; coverage: number };
   influences: Influence[];
   createdAt: string;
   // AI engine enrichment fields
@@ -90,7 +91,12 @@ const mapBackendBlock = (msg: any): ChatMessage[] => {
         // DB stores 0-100, UI wants 0-1
         bias:       (msg.biasScore      || 0) / 100,
         confidence: (msg.confidence?.overall || 0) / 100,
-        influences: (msg.xai || []).map((x: any) => ({ term: x.word, impact: x.impact / 100 })),
+        confidenceBreakdown: {
+            llm:      (msg.confidence?.llm      || 0) / 100,
+            intent:   (msg.confidence?.intent   || 0) / 100,
+            coverage: (msg.confidence?.coverage  || 0) / 100,
+        },
+        influences: (msg.xai || []).map((x: any) => ({ term: x.word, impact: (x.impact || 0) / 100 })),
         createdAt: msg.timestamp || msg.created_at || new Date().toISOString(),
         // AI engine response enrichment
         intent:               msg.intent              || '',

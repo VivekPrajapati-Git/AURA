@@ -323,10 +323,16 @@ exports.streamMessage = async (req, res) => {
 
     // 7. Send final metadata so client can update metrics without a refetch
     res.write(`data: ${JSON.stringify({ done: true, messageId: blockMsg._id, metrics: {
-      confidence:       blockMsg.confidence,
-      biasScore:        blockMsg.biasScore,
-      intent:           blockMsg.intent,
-      reliabilityLabel: blockMsg.reliabilityLabel,
+      confidence:           blockMsg.confidence,
+      biasScore:            blockMsg.biasScore,
+      intent:               blockMsg.intent,
+      reasoning:            blockMsg.reasoning,
+      reliabilityLabel:     blockMsg.reliabilityLabel,
+      factualGrounding:     blockMsg.factualGrounding,
+      neutralizedResponse:  blockMsg.neutralizedResponse,
+      caveat:               blockMsg.caveat,
+      xai:                  blockMsg.xai,
+      contextContributions: blockMsg.contextContributions,
     }})}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();

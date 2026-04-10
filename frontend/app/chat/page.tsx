@@ -14,6 +14,7 @@ type ChatItem = {
   text: string;
   bias: number;
   confidence: number;
+  confidenceBreakdown?: { llm: number; intent: number; coverage: number };
   influences: Influence[];
   intent?: string;
   reasoning?: string;
@@ -175,15 +176,33 @@ function ChatUI() {
           // Final metadata frame from Node backend
           if (parsed.done && parsed.metrics) {
             const { metrics, messageId } = parsed;
+            const m = metrics;
             const finalItem: ChatItem = {
               id: "sys-" + (messageId || Date.now()),
               role: "assistant",
               text: accumulated,
-              bias:       (metrics.biasScore      || 0) / 100,
-              confidence: (metrics.confidence?.overall || 0) / 100,
-              influences: [],
-              intent:           metrics.intent           || "",
-              reliabilityLabel: metrics.reliabilityLabel || "",
+              // DB stores 0-100, UI wants 0-1
+              bias:       (m.biasScore      || 0) / 100,
+              confidence: (m.confidence?.overall || 0) / 100,
+              confidenceBreakdown: {
+                llm:      (m.confidence?.llm      || 0) / 100,
+                intent:   (m.confidence?.intent   || 0) / 100,
+                coverage: (m.confidence?.coverage  || 0) / 100,
+              },
+              influences: (m.xai || []).map((x: any) => ({
+                term:   x.word,
+                impact: (x.impact || 0) / 100,
+              })),
+              intent:               m.intent               || "",
+              reasoning:            m.reasoning            || "",
+              neutralizedResponse:  m.neutralizedResponse  || null,
+              caveat:               m.caveat               || null,
+              reliabilityLabel:     m.reliabilityLabel     || "",
+              factualGrounding:     (m.factualGrounding    || 0) / 100,
+              contextContributions: (m.contextContributions || []).map((c: any) => ({
+                label: c.label,
+                score: typeof c.score === "number" && c.score <= 1 ? c.score : (c.score || 0) / 100,
+              })),
             };
             setMessages((prev) => [...prev, finalItem]);
             setStreamingText(null);
@@ -331,6 +350,34 @@ function ChatUI() {
                         ))}
                       </div>
                     )}
+
+                    {/* Inline confidence + factual grounding badges */}
+                    {item.role === "assistant" && (item.confidence > 0 || (item.factualGrounding ?? 0) > 0) && (
+                      <div className="mt-3 flex flex-wrap gap-3 text-[10px]">
+                        {item.confidence > 0 && (
+                          <span className="rounded-full bg-cyan-500/15 border border-cyan-500/25 px-2.5 py-1 text-cyan-300">
+                            Confidence {Math.round(item.confidence * 100)}%
+                          </span>
+                        )}
+                        {(item.factualGrounding ?? 0) > 0 && (
+                          <span className="rounded-full bg-violet-500/15 border border-violet-500/25 px-2.5 py-1 text-violet-300">
+                            Grounding {Math.round((item.factualGrounding ?? 0) * 100)}%
+                          </span>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Inline collapsible reasoning */}
+                    {item.role === "assistant" && item.reasoning && (
+                      <details className="mt-3 group">
+                        <summary className="text-[11px] uppercase tracking-wider text-slate-500 cursor-pointer hover:text-cyan-300 transition select-none">
+                          ▸ View AI reasoning
+                        </summary>
+                        <div className="mt-2 rounded-xl bg-white/5 border border-white/5 px-4 py-3 text-xs leading-5 text-slate-400 italic">
+                          {item.reasoning}
+                        </div>
+                      </details>
+                    )}
                   </div>
                 ))}
 
@@ -432,6 +479,27 @@ function ChatUI() {
                       : conf >= 0.4 ? "Moderate — verify key claims."
                       : "Low — treat with caution."}
                   </p>
+
+                  {/* Confidence breakdown */}
+                  {latestAI?.confidenceBreakdown && (
+                    <div className="mt-3 space-y-2 pl-2 border-l-2 border-white/5">
+                      {([
+                        { label: "LLM",     value: latestAI.confidenceBreakdown.llm,      color: "bg-cyan-400" },
+                        { label: "Intent",  value: latestAI.confidenceBreakdown.intent,   color: "bg-indigo-400" },
+                        { label: "Coverage",value: latestAI.confidenceBreakdown.coverage, color: "bg-teal-400" },
+                      ] as const).map((sub) => (
+                        <div key={sub.label}>
+                          <div className="flex items-center justify-between text-[11px] text-slate-400 mb-0.5">
+                            <span>{sub.label}</span>
+                            <span>{Math.round(sub.value * 100)}%</span>
+                          </div>
+                          <div className="h-1 overflow-hidden rounded-full bg-white/10">
+                            <div className={`h-full rounded-full ${sub.color} transition-all duration-500`} style={{ width: `${Math.round(sub.value * 100)}%` }} />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
 
                 {/* Factual grounding */}
