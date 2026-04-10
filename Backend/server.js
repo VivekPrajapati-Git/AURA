@@ -50,11 +50,30 @@ connectRedis();
 const dbRoutes = require('./routes/dbRoutes');
 app.use('/api/db', dbRoutes);
 
+// ── MongoDB Recovery Service ────────────────────────────────────────────────
+const { recoverSessionsFromMongo } = require('./services/recoveryService');
+
+// Manual recovery endpoint (admin use)
+const auth = require('./middleware/auth');
+app.get('/recovery/sessions', auth, async (req, res) => {
+  try {
+    const result = await recoverSessionsFromMongo(req.user.id);
+    res.json({ message: 'Recovery complete', ...result });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 console.log('Connecting to MongoDB...');
 mongoose.connect(process.env.MONGO_URI)
-  .then(() => console.log('MongoDB Connected successfully!'))
+  .then(async () => {
+    console.log('MongoDB Connected successfully!');
+    // Auto-recover sessions from MongoDB if SQL sessions table is empty
+    await recoverSessionsFromMongo();
+  })
   .catch(err => console.log('MongoDB Connection error:', err));
 
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
 });
+

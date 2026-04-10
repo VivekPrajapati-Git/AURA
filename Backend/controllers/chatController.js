@@ -1,6 +1,7 @@
 const { pool } = require('../database/sql_connection');
 const Message = require('../models/Message');
 const { callAI, buildHistory } = require('../services/aiService');
+const { processXPForMessage } = require('../services/xpService');
 
 
 // 1. Create New Chat (Session)
@@ -125,9 +126,18 @@ exports.sendMessage = async (req, res) => {
     }
     conn2.release();
 
+    // ── Award XP for this interaction ─────────────────────────────────────────
+    let xpResult = null;
+    try {
+      xpResult = await processXPForMessage(userId, newMessageBlock);
+    } catch (xpErr) {
+      console.error('[XP Error]', xpErr.message);
+    }
+
     res.status(200).json({ 
       message: 'Message Block sent', 
-      savedMessage: newMessageBlock 
+      savedMessage: newMessageBlock,
+      xp: xpResult,
     });
   } catch (err) {
     console.error(err);
@@ -335,8 +345,16 @@ exports.streamMessage = async (req, res) => {
     }
     conn2.release();
 
-    // 7. Send final metadata so client can update metrics without a refetch
-    res.write(`data: ${JSON.stringify({ done: true, messageId: blockMsg._id, metrics: {
+    // 7b. Award XP
+    let xpResult = null;
+    try {
+      xpResult = await processXPForMessage(userId, blockMsg);
+    } catch (xpErr) {
+      console.error('[XP Error]', xpErr.message);
+    }
+
+    // 8. Send final metadata so client can update metrics without a refetch
+    res.write(`data: ${JSON.stringify({ done: true, messageId: blockMsg._id, xp: xpResult, metrics: {
       confidence:           blockMsg.confidence,
       biasScore:            blockMsg.biasScore,
       intent:               blockMsg.intent,
