@@ -20,18 +20,18 @@ def get_nlp():
 
 def extract_entities(text: str) -> dict:
     """
-    Extract job-relevant entities from user message using spaCy NER.
-    Returns structured dict of skills, roles, locations, orgs found.
+    Extract general-purpose entities from user message using spaCy NER.
+    Returns structured dict of topics, entities, locations, organizations found.
     """
     nlp = get_nlp()
     doc = nlp(text)
 
     entities = {
-        "skills":        [],
-        "roles":         [],
-        "locations":     [],
-        "organizations": [],
-        "experience":    [],
+        "topics":         [],  # General topics/subjects mentioned
+        "entities":       [],  # Named entities (people, products, etc.)
+        "locations":      [],  # Geographic locations
+        "organizations":  [],  # Organizations/companies
+        "values":         [],  # Numeric values/measurements
     }
 
     # ── Named entity recognition ──────────────────────────────────────────────
@@ -40,36 +40,27 @@ def extract_entities(text: str) -> dict:
             entities["locations"].append(ent.text)
         elif ent.label_ == "ORG":
             entities["organizations"].append(ent.text)
+        elif ent.label_ in ("PERSON", "PRODUCT", "EVENT", "WORK_OF_ART"):
+            entities["entities"].append(ent.text)
+        elif ent.label_ in ("DATE", "QUANTITY", "MONEY", "PERCENT"):
+            entities["values"].append(ent.text)
 
-    # ── Noun chunks for skills and roles ─────────────────────────────────────
-    skill_keywords = {
-        "python", "java", "javascript", "typescript", "react", "node",
-        "sql", "mongodb", "postgresql", "docker", "kubernetes", "aws",
-        "machine learning", "deep learning", "nlp", "fastapi", "django",
-        "data science", "tensorflow", "pytorch", "git", "linux", "excel"
-    }
-
-    role_keywords = {
-        "developer", "engineer", "analyst", "manager", "designer",
-        "architect", "consultant", "intern", "lead", "scientist",
-        "devops", "fullstack", "frontend", "backend", "data"
-    }
-
-    for chunk in doc.noun_chunks:
-        text_lower = chunk.text.lower()
-        if any(skill in text_lower for skill in skill_keywords):
-            entities["skills"].append(chunk.text)
-        if any(role in text_lower for role in role_keywords):
-            entities["roles"].append(chunk.text)
-
-    # ── Experience pattern (e.g. "3 years", "2+ years") ──────────────────────
+    # ── Noun chunks for general topics ────────────────────────────────────────
     import re
-    exp_matches = re.findall(r"\d+\+?\s*years?", text.lower())
-    entities["experience"] = exp_matches
+    
+    # Extract standalone significant nouns (potential topics)
+    for chunk in doc.noun_chunks:
+        # Filter for multi-word or capitalized entities
+        if len(chunk.text.split()) > 1 or chunk.text[0].isupper():
+            entities["topics"].append(chunk.text)
 
-    # ── Deduplicate ───────────────────────────────────────────────────────────
+    # ── Numeric/measurement patterns ──────────────────────────────────────────
+    number_matches = re.findall(r"\d+[\.\d]*\s*(?:years?|months?|days?|percent|%|units?|times?|[a-z]+)?", text.lower())
+    entities["values"].extend(number_matches)
+
+    # ── Deduplicate and clean ─────────────────────────────────────────────────
     for key in entities:
-        entities[key] = list(set(entities[key]))
+        entities[key] = list(dict.fromkeys(entities[key]))  # Preserve order, remove duplicates
 
     return entities
 
@@ -83,21 +74,23 @@ def update_user_context(
     """
     Merge newly extracted entities into the running user context.
     Accumulates across turns — never resets unless session resets.
+    Generic version: works for any topic domain.
     """
-    updated_skills      = list(set(current_context.skills      + new_entities.get("skills", [])))
-    updated_goals       = list(set(current_context.goals       + new_entities.get("roles",  [])))
-    updated_constraints = list(set(current_context.constraints + new_entities.get("experience", [])))
+    updated_interests  = list(dict.fromkeys(current_context.interests + new_entities.get("topics", [])))
+    updated_background = list(dict.fromkeys(current_context.background + new_entities.get("entities", [])))
+    updated_constraints = list(dict.fromkeys(current_context.constraints + new_entities.get("values", [])))
 
     location = current_context.location
     if new_entities.get("locations"):
         location = new_entities["locations"][0]
 
     return UserContext(
-        skills      = updated_skills,
-        goals       = updated_goals,
-        constraints = updated_constraints,
-        location    = location,
-        preferences = current_context.preferences
+        interests       = updated_interests,
+        background      = updated_background,
+        constraints     = updated_constraints,
+        location        = location,
+        knowledge_level = current_context.knowledge_level,
+        preferences     = current_context.preferences
     )
 
 
@@ -129,15 +122,17 @@ def compute_context_contributions(
     For each element in user context, compute cosine similarity
     to the response embedding. Returns top-5 as contribution scores.
     Used by XAI module to show WHY the response said what it said.
+    Generic version for any domain.
     """
     context_items = []
 
-    for skill in user_context.skills:
-        context_items.append(("skill: " + skill, skill))
-    for goal in user_context.goals:
-        context_items.append(("role: " + goal, goal))
+    # Add all context elements with their type prefix
+    for interest in user_context.interests:
+        context_items.append(("interest: " + interest, interest))
+    for background in user_context.background:
+        context_items.append(("background: " + background, background))
     for constraint in user_context.constraints:
-        context_items.append(("experience: " + constraint, constraint))
+        context_items.append(("constraint: " + constraint, constraint))
     if user_context.location:
         context_items.append(("location: " + user_context.location, user_context.location))
 

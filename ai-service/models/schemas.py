@@ -4,18 +4,19 @@ from enum import Enum
 
 
 class IntentLabel(str, Enum):
-    resume_review        = "resume_review"
-    salary_negotiation   = "salary_negotiation"
-    interview_prep       = "interview_prep"
-    job_search           = "job_search"
-    skill_gap            = "skill_gap"
-    career_switch        = "career_switch"
-    bias_complaint       = "bias_complaint"
-    general_question     = "general_question"
-    motivation           = "motivation"
-    networking           = "networking"
-    education            = "education"
-    rejection_handling   = "rejection_handling"
+    # Generic intent labels for any topic
+    advice_seeking       = "advice_seeking"       # Asking for guidance/recommendation
+    information_request  = "information_request"  # Asking for facts/information
+    opinion_discussion   = "opinion_discussion"   # Wanting to discuss perspectives
+    problem_solving      = "problem_solving"      # Asking for help solving issue
+    learning_request     = "learning_request"     # Wants to learn/understand topic
+    debate_argument      = "debate_argument"      # Debating or arguing a point
+    creative_help        = "creative_help"        # Needs creative assistance
+    decision_making      = "decision_making"      # Help deciding between options
+    venting_support      = "venting_support"      # Expressing frustration/seeking support
+    comparison_analysis  = "comparison_analysis"  # Comparing options/analyzing
+    general_question     = "general_question"     # General open-ended question
+    task_assistance      = "task_assistance"      # Help with specific task
 
 
 class HistoryTurn(BaseModel):
@@ -24,11 +25,13 @@ class HistoryTurn(BaseModel):
 
 
 class UserContext(BaseModel):
-    skills:      list[str] = []
-    goals:       list[str] = []
-    constraints: list[str] = []
-    location:    str       = ""
-    preferences: dict      = {}
+    # Generic user profile (topic-agnostic)
+    interests:      list[str] = []  # Topics/areas user is interested in
+    knowledge_level: str      = "general"  # "beginner", "intermediate", "expert"
+    preferences:    dict      = {}  # Any user preferences
+    background:     list[str] = []  # User background/context (replaces skills)
+    constraints:    list[str] = []  # Any constraints mentioned
+    location:       str       = ""  # Optional location
 
 
 class ContextContribution(BaseModel):

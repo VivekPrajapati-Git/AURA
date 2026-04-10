@@ -12,54 +12,41 @@ os.environ['HF_HUB_OFFLINE'] = 'False'  # Set to 'True' if you want offline-only
 _classifier = None
 
 INTENT_LABELS = [
-    "resume review",
-    "salary negotiation",
-    "interview preparation",
-    "job search",
-    "skill gap analysis",
-    "career switch",
-    "bias complaint",
+    "advice seeking",
+    "information request",
+    "opinion discussion",
+    "problem solving",
+    "learning request",
+    "debate argument",
+    "creative help",
+    "decision making",
+    "venting support",
+    "comparison analysis",
     "general question",
-    "motivation and mindset",
-    "networking advice",
-    "education and courses",
-    "rejection handling",
+    "task assistance",
 ]
 
 # ── Maps human-readable label back to IntentLabel enum ────────────────────────
 
 LABEL_MAP = {
-    "resume review":           IntentLabel.resume_review,
-    "salary negotiation":      IntentLabel.salary_negotiation,
-    "interview preparation":   IntentLabel.interview_prep,
-    "job search":              IntentLabel.job_search,
-    "skill gap analysis":      IntentLabel.skill_gap,
-    "career switch":           IntentLabel.career_switch,
-    "bias complaint":          IntentLabel.bias_complaint,
-    "general question":        IntentLabel.general_question,
-    "motivation and mindset":  IntentLabel.motivation,
-    "networking advice":       IntentLabel.networking,
-    "education and courses":   IntentLabel.education,
-    "rejection handling":      IntentLabel.rejection_handling,
+    "advice seeking":      IntentLabel.advice_seeking,
+    "information request": IntentLabel.information_request,
+    "opinion discussion":  IntentLabel.opinion_discussion,
+    "problem solving":     IntentLabel.problem_solving,
+    "learning request":    IntentLabel.learning_request,
+    "debate argument":     IntentLabel.debate_argument,
+    "creative help":       IntentLabel.creative_help,
+    "decision making":     IntentLabel.decision_making,
+    "venting support":     IntentLabel.venting_support,
+    "comparison analysis": IntentLabel.comparison_analysis,
+    "general question":    IntentLabel.general_question,
+    "task assistance":     IntentLabel.task_assistance,
 }
+
+
 
 # ── Intent-specific signal keywords ──────────────────────────────────────────
-# Used by reliability scorer to check response aligns with intent
-
-INTENT_SIGNALS = {
-    IntentLabel.resume_review:       "resume skills experience format bullet points ATS",
-    IntentLabel.salary_negotiation:  "salary offer negotiation compensation package counter",
-    IntentLabel.interview_prep:      "interview question answer behavioral STAR technique",
-    IntentLabel.job_search:          "job search apply portal LinkedIn company opening",
-    IntentLabel.skill_gap:           "skill gap learn course certification missing technology",
-    IntentLabel.career_switch:       "career change transition industry pivot new role",
-    IntentLabel.bias_complaint:      "bias discrimination unfair treatment equal opportunity",
-    IntentLabel.general_question:    "advice guidance information help career",
-    IntentLabel.motivation:          "motivation confidence mindset burnout growth",
-    IntentLabel.networking:          "network connect LinkedIn referral relationship event",
-    IntentLabel.education:           "degree course certification bootcamp university study",
-    IntentLabel.rejection_handling:  "rejection feedback failure resilience try again move on",
-}
+# Imported from constants.py
 
 
 def get_classifier():
