@@ -104,14 +104,16 @@ Any limitations or things the user should verify. Leave empty if none.
 
 def _build_context_block(ctx: UserContext) -> str:
     lines = ["User profile (personalise your response using this):"]
-    if ctx.skills:
-        lines.append(f"  Skills     : {', '.join(ctx.skills)}")
-    if ctx.goals:
-        lines.append(f"  Goals      : {', '.join(ctx.goals)}")
+    if ctx.interests:
+        lines.append(f"  Interests   : {', '.join(ctx.interests)}")
+    if ctx.background:
+        lines.append(f"  Background  : {', '.join(ctx.background)}")
+    if ctx.knowledge_level:
+        lines.append(f"  Knowledge   : {ctx.knowledge_level}")
     if ctx.constraints:
-        lines.append(f"  Experience : {', '.join(ctx.constraints)}")
+        lines.append(f"  Constraints : {', '.join(ctx.constraints)}")
     if ctx.location:
-        lines.append(f"  Location   : {ctx.location}")
+        lines.append(f"  Location    : {ctx.location}")
     return "\n".join(lines)
 
 
