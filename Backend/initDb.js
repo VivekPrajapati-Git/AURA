@@ -20,6 +20,7 @@ async function initDb() {
       CREATE TABLE IF NOT EXISTS sessions (
           id VARCHAR(36) PRIMARY KEY,
           user_id VARCHAR(36) REFERENCES users(id),
+          title VARCHAR(255) DEFAULT NULL,
           created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           last_active TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
           message_count INT DEFAULT 0,

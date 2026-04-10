@@ -34,6 +34,18 @@ const { connectRedis } = require('./database/redis_connection'); // Import Redis
 // Connect to Redis
 connectRedis();
 
+// ── Run lightweight migration to add missing columns ─────────────────────
+(async () => {
+  try {
+    const { pool } = require('./database/sql_connection');
+    const conn = await pool.getConnection();
+    // Add title column to sessions if it doesn't exist
+    await conn.query("ALTER TABLE sessions ADD COLUMN title VARCHAR(255) DEFAULT NULL").catch(() => {});
+    conn.release();
+    console.log('✓ DB migration check complete');
+  } catch { /* ignore if column already exists */ }
+})();
+
 // Upstream Routes
 const dbRoutes = require('./routes/dbRoutes');
 app.use('/api/db', dbRoutes);
