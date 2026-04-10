@@ -1,10 +1,33 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Sidebar } from "../../components/Sidebar";
+import { apiUrl } from "@/lib/api-client";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 
 export default function DashboardPage() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [stats, setStats] = useState<{ xp_score: number; level: number; total_messages: number; overall_bias: number } | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
+  const userId = DEFAULT_USER_ID;
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      try {
+        const response = await fetch(apiUrl(`/user/${userId}/stats`));
+        if (!response.ok) {
+          setStatsError("Unable to load stats.");
+          return;
+        }
+        const data = await response.json();
+        setStats(data);
+      } catch {
+        setStatsError("Unable to load stats.");
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   return (
     <div className="min-h-screen bg-zinc-950 text-slate-100">
@@ -42,24 +65,23 @@ export default function DashboardPage() {
                 </p>
                 <div className="mt-6 space-y-3">
                   <div className="flex items-center justify-between text-sm text-slate-300">
-                    <span>Low bias</span>
-                    <span className="text-emerald-400">68%</span>
+                    <span>Overall bias</span>
+                    <span className="text-cyan-300">{stats ? `${Math.round(stats.overall_bias * 100)}%` : "—"}</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full w-[68%] bg-emerald-400" />
+                    <div
+                      className="h-full bg-cyan-400"
+                      style={{ width: `${stats ? Math.min(100, Math.max(0, stats.overall_bias * 100)) : 0}%` }}
+                    />
                   </div>
                   <div className="flex items-center justify-between text-sm text-slate-300">
-                    <span>Medium bias</span>
-                    <span className="text-amber-400">22%</span>
-                  </div>
-                  <div className="h-2 overflow-hidden rounded-full bg-white/10">
-                    <div className="h-full w-[22%] bg-amber-400" />
-                  </div>
-                  <div className="flex items-center justify-between text-sm text-slate-300">
-                    <span>High bias</span>
-                    <span className="text-rose-400">10%</span>
+                    <span>Confidence</span>
+                    <span className="text-emerald-400">{stats ? `${stats.xp_score ?? 0}` : "—"}</span>
                   </div>
                 </div>
+                {statsError ? (
+                  <p className="mt-4 text-sm text-rose-300">{statsError}</p>
+                ) : null}
               </article>
 
               <article className="rounded-3xl border border-white/10 bg-zinc-900/80 p-6 shadow-lg shadow-black/20">
@@ -69,13 +91,13 @@ export default function DashboardPage() {
                 </p>
                 <div className="mt-6 grid gap-4">
                   <div className="rounded-3xl bg-white/5 p-4 text-sm text-slate-200">
-                    Sessions: <strong className="text-white">128</strong>
+                    Level: <strong className="text-white">{stats?.level ?? "—"}</strong>
                   </div>
                   <div className="rounded-3xl bg-white/5 p-4 text-sm text-slate-200">
-                    Questions: <strong className="text-white">342</strong>
+                    Messages: <strong className="text-white">{stats?.total_messages ?? "—"}</strong>
                   </div>
                   <div className="rounded-3xl bg-white/5 p-4 text-sm text-slate-200">
-                    Badges earned: <strong className="text-white">84</strong>
+                    XP score: <strong className="text-white">{stats?.xp_score ?? "—"}</strong>
                   </div>
                 </div>
               </article>

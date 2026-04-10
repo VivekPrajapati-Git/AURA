@@ -1,6 +1,9 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { apiUrl } from "@/lib/api-client";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 
 type SidebarProps = {
   open?: boolean;
@@ -14,7 +17,36 @@ const navItems = [
   { href: "/admin", label: "Admin Page" },
 ];
 
+type ChatSummary = {
+  id: string;
+  title: string;
+  created_at: string;
+  message_count: number;
+};
+
 export function Sidebar({ open = true, onClose }: SidebarProps) {
+  const [chatList, setChatList] = useState<ChatSummary[]>([]);
+  const [listError, setListError] = useState<string | null>(null);
+  const userId = DEFAULT_USER_ID;
+
+  useEffect(() => {
+    const loadChatList = async () => {
+      try {
+        const response = await fetch(apiUrl(`/chat/list/${userId}`));
+        if (!response.ok) {
+          setListError("Unable to load recent chats.");
+          return;
+        }
+        const data = await response.json();
+        setChatList(Array.isArray(data) ? data : []);
+      } catch {
+        setListError("Unable to load recent chats.");
+      }
+    };
+
+    loadChatList();
+  }, []);
+
   if (!open) return null;
 
   return (
@@ -49,6 +81,26 @@ export function Sidebar({ open = true, onClose }: SidebarProps) {
           </Link>
         ))}
       </nav>
+
+      <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-slate-300">
+        <p className="font-medium text-white">Recent chats</p>
+        {listError ? (
+          <p className="mt-3 text-sm text-rose-300">{listError}</p>
+        ) : chatList.length === 0 ? (
+          <p className="mt-3 text-sm text-slate-400">Loading recent chats…</p>
+        ) : (
+          <ul className="mt-4 space-y-3">
+            {chatList.slice(0, 4).map((chat) => (
+              <li key={chat.id} className="rounded-3xl bg-zinc-950/80 p-3">
+                <p className="text-sm font-semibold text-white truncate">{chat.title || "Untitled chat"}</p>
+                <p className="mt-1 text-xs text-slate-400">
+                  {chat.message_count} messages · {new Date(chat.created_at).toLocaleDateString()}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
 
       <div className="rounded-3xl border border-white/10 bg-white/5 p-5 text-sm text-slate-300">
         <p className="font-medium text-white">What you can do</p>

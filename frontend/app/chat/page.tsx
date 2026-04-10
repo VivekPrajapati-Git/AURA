@@ -2,6 +2,8 @@
 
 import { type FormEvent, useEffect, useMemo, useState } from "react";
 import { Sidebar } from "../../components/Sidebar";
+import { apiUrl } from "@/lib/api-client";
+import { DEFAULT_USER_ID } from "@/lib/constants";
 
 type ChatItem = {
   id: string;
@@ -41,7 +43,7 @@ export default function ChatPage() {
   const [isSending, setIsSending] = useState(false);
   const [chatId, setChatId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const userId = "demo-user";
+  const userId = DEFAULT_USER_ID;
 
   useEffect(() => {
     const initializeChat = async () => {
@@ -49,18 +51,19 @@ export default function ChatPage() {
         const storedId = window.localStorage.getItem("aura-chat-id");
 
         if (storedId) {
-          const response = await fetch(`/api/chat/${storedId}`);
+          const response = await fetch(apiUrl(`/chat/${storedId}`));
           if (response.ok) {
             setChatId(storedId);
             const data = await response.json();
-            if (Array.isArray(data.chat?.messages) && data.chat.messages.length > 0) {
-              setMessages((prev) => [...prev, ...data.chat.messages]);
+            const messages = data.messages ?? data.chat?.messages ?? [];
+            if (Array.isArray(messages) && messages.length > 0) {
+              setMessages((prev) => [...prev, ...messages]);
             }
             return;
           }
         }
 
-        const createResponse = await fetch("/api/chat/create", {
+        const createResponse = await fetch(apiUrl("/chat/create"), {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ userId, title: "AURA Chat" }),
@@ -71,7 +74,7 @@ export default function ChatPage() {
         }
 
         const payload = await createResponse.json();
-        const createdChatId = payload.chat?.id;
+        const createdChatId = payload.chatId ?? payload.chat?.id;
         if (typeof createdChatId === "string") {
           setChatId(createdChatId);
           window.localStorage.setItem("aura-chat-id", createdChatId);
@@ -113,10 +116,10 @@ export default function ChatPage() {
     }
 
     try {
-      const response = await fetch("/api/chat/message", {
+      const response = await fetch(apiUrl("/chat/message"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatId, message: userText }),
+        body: JSON.stringify({ chatId, text: userText, role: "user" }),
       });
       const payload = await response.json();
 
@@ -126,7 +129,18 @@ export default function ChatPage() {
         return;
       }
 
-      setMessages((prev) => [...prev, payload.assistantMessage]);
+      const assistantMessage =
+        payload.assistantMessage ??
+        payload.assistant ??
+        ({
+          id: `assistant-${Date.now()}`,
+          role: "assistant",
+          text: payload.text ?? payload.response ?? "AURA has responded.",
+          bias: payload.bias ?? 0,
+          confidence: payload.confidence ?? 0,
+        } as ChatItem);
+
+      setMessages((prev) => [...prev, assistantMessage]);
     } catch {
       setError("Network error while sending your message.");
     } finally {

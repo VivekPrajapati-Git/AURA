@@ -1,8 +1,19 @@
 # AURA Master API Documentation
 
-This file documents all 11 endpoints configured on the backend utilizing the MySQL Session & MongoDB Core dual-system architecture. 
+This file documents all 11 endpoints configured on the backend utilizing the MySQL Session & MongoDB Core dual-system architecture.
 
-**Base URL:** `http://localhost:5000`
+**Base URL:** `http://192.168.137.94/5000`
+
+---
+
+## 🧩 Frontend Environment Setup
+The frontend reads the backend base URL from the environment variable:
+
+```env
+NEXT_PUBLIC_API_BASE_URL=http://192.168.137.94/5000
+```
+
+Copy `frontend/.env.example` to `frontend/.env.local` and keep the local file private.
 
 ---
 
@@ -36,7 +47,7 @@ This file documents all 11 endpoints configured on the backend utilizing the MyS
   * `email` (string)
   * `password` (string)
 * **Response Content:** Returns `{ token: "...", user: { id: "uuid", username: "text"} }`
-  
+
 ---
 
 ## 2️⃣ Core Chat Interactions (MongoDB + SQL)
@@ -44,6 +55,7 @@ This file documents all 11 endpoints configured on the backend utilizing the MyS
 ### 3. Create New Chat Session
 * **Endpoint:** `POST /chat/create`
 * **Purpose:** Initializes a secure tracking row in the MySQL `sessions` table.
+* **Body:** `{ userId: string, title?: string }`
 * **Returns:** `{ "message": "Chat created successfully", "chatId": "<MySQL_Session_UUID>" }`
 * *Note: Pass the returned `chatId` to subsequent Message streams.*
 
@@ -62,7 +74,8 @@ This file documents all 11 endpoints configured on the backend utilizing the MyS
 
 ### 6. Sidebar Loading (List All Chats)
 * **Endpoint:** `GET /chat/list/:userId`
-* **Purpose:** Optimized flat-data hit to MySQL directly for rendering fast UI sidebars. Returns `title`, `created_at` and `message_count`.
+* **Purpose:** Optimized flat-data hit to MySQL directly for rendering fast UI sidebars.
+* **Returns:** `[{ id, title, created_at, message_count }, ...]`
 
 ---
 
@@ -72,7 +85,7 @@ This file documents all 11 endpoints configured on the backend utilizing the MyS
 * **Endpoint:** `POST /chat/message/stream/:chatId`
 * **Purpose:** Implements true **Server-Sent Events (`text/event-stream`)**.
 * **Body:** `{ "text": "Give me an overview of Python" }`
-* **Handling:** Returns discrete data chunks asynchronously (`data: {"chunk": "..."}`). Watch for the sequence `data: [DONE]` to release your UI loader. 
+* **Handling:** Returns discrete data chunks asynchronously (`data: {"chunk": "..."}`). Watch for the sequence `data: [DONE]` to release your UI loader.
 
 ### 8. Update Chat Title
 * **Endpoint:** `PATCH /chat/:chatId/title`

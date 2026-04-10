@@ -1,9 +1,8 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { Sidebar } from "../../components/Sidebar";
+import { Sidebar } from "../../../components/Sidebar";
 import { apiUrl } from "@/lib/api-client";
-import { DEFAULT_USER_ID } from "@/lib/constants";
 
 type Influence = {
   term: string;
@@ -92,7 +91,7 @@ export default function Home() {
   const [xp, setXp] = useState(140);
   const [badges, setBadges] = useState<string[]>(["Explorer"]);
   const [error, setError] = useState<string | null>(null);
-  const userId = DEFAULT_USER_ID;
+  const userId = "demo-user";
 
   useEffect(() => {
     const initializeChat = async () => {
