@@ -65,6 +65,7 @@ function ChatUI() {
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
+  const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -96,15 +97,22 @@ function ChatUI() {
     loadSession();
   }, [activeChatId]);
 
-  // ── Latest assistant message (for the metrics panel) ─────────────────────
+  // ── Active AI message for the metrics panel (selected or latest) ──────────
   const latestAI = useMemo(
     () => [...messages].reverse().find((m) => m.role === "assistant"),
     [messages]
   );
+  const activeAI = useMemo(
+    () => (selectedMsgId ? messages.find((m) => m.id === selectedMsgId) : null) || latestAI,
+    [messages, selectedMsgId, latestAI]
+  );
 
-  const bLabel = biasLabel(latestAI?.bias ?? 0);
-  const rel    = relLabel(latestAI?.reliabilityLabel);
-  const conf   = latestAI?.confidence ?? 0;
+  // Reset selection when switching chat sessions
+  useEffect(() => { setSelectedMsgId(null); }, [activeChatId]);
+
+  const bLabel = biasLabel(activeAI?.bias ?? 0);
+  const rel    = relLabel(activeAI?.reliabilityLabel);
+  const conf   = activeAI?.confidence ?? 0;
 
   // ── Send / Stream ─────────────────────────────────────────────────────────
 
@@ -302,9 +310,12 @@ function ChatUI() {
                 {messages.map((item) => (
                   <div
                     key={item.id}
+                    onClick={() => item.role === "assistant" && setSelectedMsgId(item.id === selectedMsgId ? null : item.id)}
                     className={`rounded-2xl px-5 py-4 text-sm leading-7 transition-all ${
                       item.role === "assistant"
-                        ? "bg-white/5 text-slate-100 self-start max-w-[88%]"
+                        ? `bg-white/5 text-slate-100 self-start max-w-[88%] cursor-pointer hover:bg-white/[0.08] ${
+                            selectedMsgId === item.id ? "ring-2 ring-cyan-400/60 bg-white/[0.08]" : ""
+                          }`
                         : "bg-cyan-500/15 text-cyan-100 self-end max-w-[80%]"
                     }`}
                   >
@@ -443,7 +454,16 @@ function ChatUI() {
 
               {/* Reliability + Bias + Confidence */}
               <div className="rounded-3xl border border-white/10 bg-zinc-900/80 p-6 shadow-lg shadow-black/20 space-y-5">
-                <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">Live Metrics</p>
+                <div>
+                  <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80">
+                    {selectedMsgId ? "Selected Message Metrics" : "Live Metrics"}
+                  </p>
+                  <p className="text-[10px] text-slate-500 mt-1">
+                    {selectedMsgId
+                      ? "Click the message again to deselect"
+                      : "Click any AURA response to inspect its metrics"}
+                  </p>
+                </div>
 
                 {/* Reliability */}
                 <div className="flex items-center justify-between">
@@ -458,15 +478,15 @@ function ChatUI() {
                   <div className="flex items-center justify-between mb-2">
                     <span className="text-sm text-slate-400">Bias score</span>
                     <span className={`rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wider ${bLabel.color}`}>
-                      {bLabel.text} · {Math.round((latestAI?.bias ?? 0) * 100)}%
+                      {bLabel.text} · {Math.round((activeAI?.bias ?? 0) * 100)}%
                     </span>
                   </div>
                   <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
                     <div
                       className="h-full rounded-full transition-all duration-700"
                       style={{
-                        width: `${Math.round((latestAI?.bias ?? 0) * 100)}%`,
-                        background: (latestAI?.bias ?? 0) < 0.3 ? "#10b981" : (latestAI?.bias ?? 0) < 0.6 ? "#fbbf24" : "#f43f5e",
+                        width: `${Math.round((activeAI?.bias ?? 0) * 100)}%`,
+                        background: (activeAI?.bias ?? 0) < 0.3 ? "#10b981" : (activeAI?.bias ?? 0) < 0.6 ? "#fbbf24" : "#f43f5e",
                       }}
                     />
                   </div>
@@ -488,12 +508,12 @@ function ChatUI() {
                   </p>
 
                   {/* Confidence breakdown */}
-                  {latestAI?.confidenceBreakdown && (
+                  {activeAI?.confidenceBreakdown && (
                     <div className="mt-3 space-y-2 pl-2 border-l-2 border-white/5">
                       {([
-                        { label: "LLM",     value: latestAI.confidenceBreakdown.llm,      color: "bg-cyan-400" },
-                        { label: "Intent",  value: latestAI.confidenceBreakdown.intent,   color: "bg-indigo-400" },
-                        { label: "Coverage",value: latestAI.confidenceBreakdown.coverage, color: "bg-teal-400" },
+                        { label: "LLM",     value: activeAI.confidenceBreakdown.llm,      color: "bg-cyan-400" },
+                        { label: "Intent",  value: activeAI.confidenceBreakdown.intent,   color: "bg-indigo-400" },
+                        { label: "Coverage",value: activeAI.confidenceBreakdown.coverage, color: "bg-teal-400" },
                       ] as const).map((sub) => (
                         <div key={sub.label}>
                           <div className="flex items-center justify-between text-[11px] text-slate-400 mb-0.5">
@@ -510,36 +530,36 @@ function ChatUI() {
                 </div>
 
                 {/* Factual grounding */}
-                {latestAI?.factualGrounding !== undefined && (
+                {activeAI?.factualGrounding !== undefined && (
                   <div>
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm text-slate-400">Factual grounding</span>
-                      <span className="text-sm font-semibold text-white">{Math.round((latestAI.factualGrounding) * 100)}%</span>
+                      <span className="text-sm font-semibold text-white">{Math.round((activeAI.factualGrounding) * 100)}%</span>
                     </div>
                     <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
-                      <div className="h-full rounded-full bg-violet-400 transition-all duration-700" style={{ width: `${Math.round((latestAI.factualGrounding) * 100)}%` }} />
+                      <div className="h-full rounded-full bg-violet-400 transition-all duration-700" style={{ width: `${Math.round((activeAI.factualGrounding) * 100)}%` }} />
                     </div>
                   </div>
                 )}
               </div>
 
               {/* Intent */}
-              {latestAI?.intent && (
+              {activeAI?.intent && (
                 <div className="rounded-3xl border border-white/10 bg-zinc-900/80 p-6 shadow-lg shadow-black/20">
                   <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80 mb-3">Detected Intent</p>
                   <span className="inline-block rounded-xl bg-cyan-500/15 border border-cyan-500/30 px-4 py-2 text-sm font-semibold text-cyan-300">
-                    {latestAI.intent.replace(/_/g, " ")}
+                    {activeAI.intent.replace(/_/g, " ")}
                   </span>
                 </div>
               )}
 
               {/* Explainability — XAI tokens */}
-              {Array.isArray(latestAI?.influences) && latestAI.influences.length > 0 && (
+              {Array.isArray(activeAI?.influences) && activeAI.influences.length > 0 && (
                 <div className="rounded-3xl border border-white/10 bg-zinc-900/80 p-6 shadow-lg shadow-black/20">
                   <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80 mb-1">Explainability</p>
                   <h3 className="text-lg font-semibold text-white mb-4">Token Influence</h3>
                   <div className="space-y-3">
-                    {latestAI.influences.slice(0, 6).map((inf) => (
+                    {activeAI.influences.slice(0, 6).map((inf) => (
                       <div key={inf.term}>
                         <div className="flex items-center justify-between text-sm text-slate-300 mb-1">
                           <span>{inf.term}</span>
@@ -555,12 +575,12 @@ function ChatUI() {
               )}
 
               {/* Context contributions */}
-              {Array.isArray(latestAI?.contextContributions) && latestAI.contextContributions.length > 0 && (
+              {Array.isArray(activeAI?.contextContributions) && activeAI.contextContributions.length > 0 && (
                 <div className="rounded-3xl border border-white/10 bg-zinc-900/80 p-6 shadow-lg shadow-black/20">
                   <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80 mb-1">Context Used</p>
                   <h3 className="text-lg font-semibold text-white mb-4">What influenced AURA</h3>
                   <div className="space-y-3">
-                    {latestAI.contextContributions.map((c) => (
+                    {activeAI.contextContributions.map((c) => (
                       <div key={c.label}>
                         <div className="flex items-center justify-between text-sm text-slate-300 mb-1">
                           <span>{c.label}</span>
@@ -576,10 +596,10 @@ function ChatUI() {
               )}
 
               {/* Reasoning */}
-              {latestAI?.reasoning && (
+              {activeAI?.reasoning && (
                 <div className="rounded-3xl border border-white/10 bg-zinc-900/80 p-6 shadow-lg shadow-black/20">
                   <p className="text-xs uppercase tracking-[0.24em] text-cyan-300/80 mb-2">AI Reasoning</p>
-                  <p className="text-sm leading-6 text-slate-400 italic">{latestAI.reasoning}</p>
+                  <p className="text-sm leading-6 text-slate-400 italic">{activeAI.reasoning}</p>
                 </div>
               )}
 
