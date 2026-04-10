@@ -21,11 +21,15 @@ app.get('/', (req, res) => {
 });
 
 // Database Connections
-require('./sql_connection'); // Initialize PostgreSQL pool
-const { connectRedis } = require('./redis_connection'); // Import Redis connection helper
+require('./database/sql_connection'); // Initialize SQL pool
+const { connectRedis } = require('./database/redis_connection'); // Import Redis connection helper
 
 // Connect to Redis
 connectRedis();
+
+// API Routes
+const dbRoutes = require('./routes/dbRoutes');
+app.use('/api/db', dbRoutes);
 
 // mongoose.connect(process.env.MONGO_URI, {
 //     useNewUrlParser: true,
