@@ -1,14 +1,29 @@
 import { NextResponse } from "next/server";
-import { getMessage } from "@/lib/chat-store";
+import { cookies } from "next/headers";
 
+const NODE_BASE = "http://127.0.0.1:5000";
+
+// GET /api/chat/[chatId]/message/[messageId]
+// Proxies to Node: GET /chat/:chatId/message/:messageId
 export async function GET(
   _request: Request,
   context: any
 ) {
-  const { chatId, messageId } = context.params as { chatId: string; messageId: string };
-  const message = getMessage(chatId, messageId);
-  if (!message) {
-    return NextResponse.json({ error: "Message not found." }, { status: 404 });
+  const { chatId, messageId } = await (context.params as Promise<{ chatId: string; messageId: string }>);
+  const cookieStore = await cookies();
+  const token = cookieStore.get("aura-token")?.value || "";
+
+  const res = await fetch(`${NODE_BASE}/chat/${chatId}/message/${messageId}`, {
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
+    },
+  });
+
+  if (!res.ok) {
+    return NextResponse.json({ error: "Message not found." }, { status: res.status });
   }
+
+  const message = await res.json();
   return NextResponse.json({ message });
 }

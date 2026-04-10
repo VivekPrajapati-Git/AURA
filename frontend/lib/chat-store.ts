@@ -9,11 +9,20 @@ export type ChatMessage = {
   id: string;
   role: MessageRole;
   text: string;
-  bias: number;
-  confidence: number;
+  bias: number;           // 0–1
+  confidence: number;     // 0–1
   influences: Influence[];
   createdAt: string;
+  // AI engine enrichment fields
+  intent?: string;
+  reasoning?: string;
+  neutralizedResponse?: string | null;
+  caveat?: string | null;
+  reliabilityLabel?: string;  // "green" | "amber" | "red"
+  factualGrounding?: number;  // 0–1
+  contextContributions?: { label: string; score: number }[];
 };
+
 
 export type Chat = {
   id: string;
@@ -55,7 +64,7 @@ const getHeaders = async () => {
     }
 }
 
-const getUserId = async () => {
+export const getUserId = async () => {
     const cookieStore = await cookies();
     return cookieStore.get('aura-user-id')?.value || "";
 }
@@ -63,7 +72,7 @@ const getUserId = async () => {
 const mapBackendBlock = (msg: any): ChatMessage[] => {
     const mongoId = msg._id || msg.id || "0";
     
-    // We map a Single Database Block into TWO UI Bubbles
+    // Map a Single Database Block into TWO UI Bubbles
     const userMsg: ChatMessage = {
         id: "usr-" + mongoId,
         role: "user",
@@ -78,21 +87,28 @@ const mapBackendBlock = (msg: any): ChatMessage[] => {
         id: "sys-" + mongoId,
         role: "assistant",
         text: msg.systemResponse || "",
-        bias: (msg.biasScore || 0) / 100,
-        confidence: (msg.confidence?.overall || 0) / 100, 
-        influences: msg.xai || [],
-        createdAt: msg.timestamp || msg.created_at || new Date().toISOString()
+        // DB stores 0-100, UI wants 0-1
+        bias:       (msg.biasScore      || 0) / 100,
+        confidence: (msg.confidence?.overall || 0) / 100,
+        influences: (msg.xai || []).map((x: any) => ({ term: x.word, impact: x.impact / 100 })),
+        createdAt: msg.timestamp || msg.created_at || new Date().toISOString(),
+        // AI engine response enrichment
+        intent:               msg.intent              || '',
+        reasoning:            msg.reasoning           || '',
+        neutralizedResponse:  msg.neutralizedResponse || null,
+        caveat:               msg.caveat              || null,
+        reliabilityLabel:     msg.reliabilityLabel    || '',
+        factualGrounding:     (msg.factualGrounding   || 0) / 100,
+        contextContributions: msg.contextContributions || [],
     };
     
-    // If system response is empty string (e.g. while streaming hasn't completed), you optionally omit it. 
-    // But since it's synchronous here, it handles the UI fine.
-    // However, if systemResponse doesn't exist at all yet, we just return the user message.
     if (!msg.systemResponse) {
         return [userMsg];
     }
     
     return [userMsg, sysMsg];
 }
+
 
 export const createChat = async (userId: string, title = "New conversation"): Promise<Chat> => {
     const headers = await getHeaders();

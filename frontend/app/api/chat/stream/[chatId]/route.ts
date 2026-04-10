@@ -1,38 +1,46 @@
-import { getChat, addMessage, generateAssistantText } from "@/lib/chat-store";
+import { cookies } from "next/headers";
 
+const NODE_BASE = "http://127.0.0.1:5000";
+
+// GET /api/chat/stream/[chatId]?message=...
+// Proxies the Node SSE stream to the browser transparently
 export async function GET(
   request: Request,
   context: any
 ) {
-  const { chatId } = context.params as { chatId: string };
-  const chat = getChat(chatId);
-  if (!chat) {
-    return new Response(JSON.stringify({ error: "Chat not found." }), { status: 404, headers: { "Content-Type": "application/json" } });
-  }
-
+  const { chatId } = await (context.params as Promise<{ chatId: string }>);
   const url = new URL(request.url);
   const userText = url.searchParams.get("message");
+
   if (!userText) {
-    return new Response(JSON.stringify({ error: "message query parameter is required." }), { status: 400, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ error: "message query parameter is required." }), {
+      status: 400,
+      headers: { "Content-Type": "application/json" },
+    });
   }
 
-  const responseText = generateAssistantText(userText);
-  const encoder = new TextEncoder();
-  const stream = new ReadableStream({
-    async start(controller) {
-      const chunks = responseText.split(" ");
-      for (const chunk of chunks) {
-        controller.enqueue(encoder.encode(`data: ${chunk} \n\n`));
-        await new Promise((resolve) => setTimeout(resolve, 120));
-      }
-      controller.enqueue(encoder.encode("event: done\ndata: complete\n\n"));
-      controller.close();
+  const cookieStore = await cookies();
+  const token = cookieStore.get("aura-token")?.value || "";
 
-      addMessage(chatId, "assistant", responseText);
+  // Forward as POST to Node SSE endpoint
+  const upstreamRes = await fetch(`${NODE_BASE}/chat/message/stream/${chatId}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${token}`,
     },
+    body: JSON.stringify({ text: userText }),
   });
 
-  return new Response(stream, {
+  if (!upstreamRes.ok || !upstreamRes.body) {
+    return new Response(JSON.stringify({ error: "Upstream SSE failed." }), {
+      status: 502,
+      headers: { "Content-Type": "application/json" },
+    });
+  }
+
+  // Pipe the upstream SSE stream straight through to the browser
+  return new Response(upstreamRes.body, {
     headers: {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
