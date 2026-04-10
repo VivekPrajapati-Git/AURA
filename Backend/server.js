@@ -25,11 +25,15 @@ app.use('/auth', require('./routes/auth'));
 app.use('/chat', require('./routes/chat'));
 
 // Database Connections
-require('./database/sql_connection'); // Initialize PostgreSQL pool
+require('./database/sql_connection'); // Initialize SQL pool
 const { connectRedis } = require('./database/redis_connection'); // Import Redis connection helper
 
 // Connect to Redis
 connectRedis();
+
+// Upstream Routes
+const dbRoutes = require('./routes/dbRoutes');
+app.use('/api/db', dbRoutes);
 
 console.log('Connecting to MongoDB...');
 mongoose.connect(process.env.MONGO_URI)
