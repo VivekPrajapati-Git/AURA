@@ -24,3 +24,12 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans);
 }
+
+/* XP toast slide-in animation */
+@keyframes slideInRight {
+  from { opacity: 0; transform: translateX(100px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+.animate-slideInRight {
+  animation: slideInRight 0.35s ease-out;
+}

@@ -66,6 +66,7 @@ function ChatUI() {
   const [error, setError] = useState<string | null>(null);
   const [sidebarRefreshKey, setSidebarRefreshKey] = useState(0);
   const [selectedMsgId, setSelectedMsgId] = useState<string | null>(null);
+  const [xpToast, setXPToast] = useState<{ earned: number; total: number; level: number; breakdown: any } | null>(null);
 
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -224,6 +225,17 @@ function ChatUI() {
             eventSource.close();
             setIsSending(false);
             setSidebarRefreshKey((k) => k + 1);
+
+            // Show XP toast if available
+            if (parsed.xp) {
+              setXPToast({
+                earned: parsed.xp.xpEarned,
+                total: parsed.xp.newXP,
+                level: parsed.xp.newLevel,
+                breakdown: parsed.xp.breakdown,
+              });
+              setTimeout(() => setXPToast(null), 4000);
+            }
           }
         } catch {
           // plain text chunk (shouldn't happen but guard anyway)
@@ -287,6 +299,42 @@ function ChatUI() {
               <span className="text-rose-400">⚠</span>
               {error}
               <button onClick={() => setError(null)} className="ml-auto text-rose-500 hover:text-rose-300">✕</button>
+            </div>
+          )}
+
+          {/* ── XP Toast ── */}
+          {xpToast && (
+            <div className="animate-slideInRight fixed top-6 right-6 z-50 rounded-2xl border border-cyan-500/30 bg-zinc-900/95 backdrop-blur-xl px-5 py-4 shadow-2xl shadow-cyan-500/10 max-w-xs">
+              <div className="flex items-center gap-3">
+                <span className="text-2xl">⚡</span>
+                <div>
+                  <p className="text-sm font-semibold text-cyan-300">+{xpToast.earned} XP earned!</p>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    Total: {xpToast.total} XP · Level {xpToast.level}
+                  </p>
+                </div>
+              </div>
+              {xpToast.breakdown && (
+                <div className="mt-3 flex flex-wrap gap-1.5">
+                  {xpToast.breakdown.baseXP > 0 && (
+                    <span className="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-400">Base +{xpToast.breakdown.baseXP}</span>
+                  )}
+                  {xpToast.breakdown.biasAwareness > 2 && (
+                    <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-300">
+                      {xpToast.breakdown.biasAwareness >= 10 ? "🎯 Bias" : "✅ Clean"} +{xpToast.breakdown.biasAwareness}
+                    </span>
+                  )}
+                  {xpToast.breakdown.confidenceBonus > 0 && (
+                    <span className="rounded-full bg-cyan-500/20 px-2 py-0.5 text-[10px] text-cyan-300">Conf +{xpToast.breakdown.confidenceBonus}</span>
+                  )}
+                  {xpToast.breakdown.intentBonus > 0 && (
+                    <span className="rounded-full bg-violet-500/20 px-2 py-0.5 text-[10px] text-violet-300">Intent +{xpToast.breakdown.intentBonus}</span>
+                  )}
+                  {xpToast.breakdown.groundingBonus > 0 && (
+                    <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] text-emerald-300">Grounding +{xpToast.breakdown.groundingBonus}</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 
