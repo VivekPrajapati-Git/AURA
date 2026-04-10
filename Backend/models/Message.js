@@ -53,16 +53,58 @@ const messageSchema = new mongoose.Schema({
     level: String           // "Easy", "Medium", "Hard"
   },
 
-  // 🧠 XAI Breakdown (UPDATED)
+  // 🎯 Intent & Reasoning (from AI engine)
+  intent: {
+    type: String,
+    default: ''
+  },
+
+  reasoning: {
+    type: String,
+    default: ''
+  },
+
+  neutralizedResponse: {
+    type: String,
+    default: null
+  },
+
+  caveat: {
+    type: String,
+    default: null
+  },
+
+  // 🚦 Reliability
+  reliabilityLabel: {
+    type: String,
+    enum: ['green', 'amber', 'red', ''],
+    default: ''
+  },
+
+  factualGrounding: {
+    type: Number,
+    default: 0
+  },
+
+  // 🧠 XAI Breakdown — shap tokens from AI engine
   xai: [
     {
-      word: String,
-      impact: Number,       // 0–100 %
-      risk: Number,         // 0–100 %
+      word:   String,   // shap token
+      impact: Number,   // 0–100 (shap score * 100)
+      risk:   Number,   // placeholder, 0 by default
       label: {
         type: String,
-        enum: ["low", "medium", "high"]
+        enum: ['low', 'medium', 'high'],
+        default: 'low'
       }
+    }
+  ],
+
+  // 🔍 Context contributions (what context influenced the response)
+  contextContributions: [
+    {
+      label: String,
+      score: Number   // 0.0 – 1.0
     }
   ],
 

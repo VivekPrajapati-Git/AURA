@@ -1,5 +1,7 @@
 const { pool } = require('../database/sql_connection');
 const Message = require('../models/Message');
+const { callAI, buildHistory } = require('../services/aiService');
+
 
 // 1. Create New Chat (Session)
 exports.createChat = async (req, res) => {
@@ -50,28 +52,75 @@ exports.sendMessage = async (req, res) => {
       connection.release();
       return res.status(404).json({ error: 'Chat not found or unauthorized' });
     }
+    connection.release();
 
-    const fakeAiOutput = "I have queried the underlying SQL and MongoDB engines. This is securely mapped through real routing!";
+    // ── Build conversation history for AI context ──────────────────────────────
+    const recentDocs = await Message.find({ sessionId: chatId }).sort({ timestamp: 1 }).limit(20);
+    const history = buildHistory(recentDocs); // [{role, content}, ...]
 
-    // Save Unified Message Block to MongoDB
+    // ── Call Python AI Engine ──────────────────────────────────────────────────
+    let aiResult;
+    try {
+      aiResult = await callAI({ message: text, sessionId: chatId, history });
+    } catch (aiErr) {
+      console.error('[AI Engine Error]', aiErr.message);
+      return res.status(502).json({ error: aiErr.message });
+    }
+
+    // ── Map InferResponse → XAI array for MongoDB ──────────────────────────────
+    const xaiMapped = (aiResult.xai_data?.shap_tokens || []).map(t => ({
+      word:   t.token,
+      impact: Math.round(Math.abs(t.score) * 100),
+      risk:   0,
+      label:  Math.abs(t.score) > 0.3 ? 'high' : Math.abs(t.score) > 0.1 ? 'medium' : 'low'
+    }));
+
+    const contextContribs = (aiResult.xai_data?.context_contributions || []).map(c => ({
+      label: c.label,
+      score: c.score
+    }));
+
+    // ── Save Unified Message Block to MongoDB ──────────────────────────────────
     const newMessageBlock = new Message({
-      sessionId: chatId,
-      userPrompt: text,
-      systemResponse: fakeAiOutput,
-      // Defaulting analytics for the AI turn to zeros so it doesn't inflate metrics falsely
-      confidence: { overall: 0, llm: 0, intent: 0, coverage: 0 },
-      biasScore: 0,
-      readability: { score: 0, level: "N/A" }
+      sessionId:    chatId,
+      userPrompt:   text,
+      systemResponse: aiResult.response,
+
+      // Confidence  (AI returns 0–1 floats, we store 0–100)
+      confidence: {
+        overall:  Math.round((aiResult.reliability?.overall         || 0) * 100),
+        llm:      Math.round((aiResult.reliability?.llm_confidence  || 0) * 100),
+        intent:   Math.round((aiResult.reliability?.intent_confidence || 0) * 100),
+        coverage: Math.round((aiResult.reliability?.factual_grounding || 0) * 100),
+      },
+
+      // Bias  (composite is 0–1 → store as 0–100)
+      biasScore: Math.round((aiResult.bias_score?.composite || 0) * 100),
+
+      // Intent & explanation
+      intent:    aiResult.intent    || '',
+      reasoning: aiResult.reasoning || '',
+      neutralizedResponse: aiResult.neutralized_response || null,
+      caveat:               aiResult.caveat              || null,
+
+      // Reliability
+      reliabilityLabel: aiResult.reliability?.label        || '',
+      factualGrounding: Math.round((aiResult.reliability?.factual_grounding || 0) * 100),
+
+      // XAI
+      xai:                 xaiMapped,
+      contextContributions: contextContribs,
     });
     
     await newMessageBlock.save();
 
-    // Update SQL message_count & last_active. (User+System = 2 turns technically, but 1 block. Let's add 2 since stats rely on it)
-    await connection.query(
+    // ── Update SQL session stats ────────────────────────────────────────────────
+    const conn2 = await pool.getConnection();
+    await conn2.query(
       "UPDATE sessions SET message_count = message_count + 2, last_active = CURRENT_TIMESTAMP WHERE id = ?",
       [chatId]
     );
-    connection.release();
+    conn2.release();
 
     res.status(200).json({ 
       message: 'Message Block sent', 
@@ -82,6 +131,7 @@ exports.sendMessage = async (req, res) => {
     res.status(500).json({ error: 'Server Error sending message' });
   }
 };
+
 
 // 3. Get Single Chat (Messages)
 exports.getChat = async (req, res) => {
@@ -197,50 +247,96 @@ exports.getMessageById = async (req, res) => {
   }
 };
 
-// 8. Stream AI Response (SSE)
+// 8. Stream AI Response (SSE) — real AI call, wrapped in SSE
 exports.streamMessage = async (req, res) => {
   try {
     const { chatId } = req.params;
-    const { text } = req.body; // user's prompt
+    const { text } = req.body;
+    const userId = req.user?.id;
 
-    // 1. Create the unified Block with User Prompt initially
-    const blockMsg = new Message({ 
-      sessionId: chatId, 
-      userPrompt: text,
-      systemResponse: "",
-      confidence: { overall: 0, llm: 0, intent: 0, coverage: 0 },
-      biasScore: 0
-    });
-    await blockMsg.save();
-
-    // 2. Setup Server-Sent Events headers
+    // 1. Setup SSE headers immediately so client knows streaming has started
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.flushHeaders();
 
-    // 3. Simulate AI typing (replace with real LLM stream later)
-    const fakeResponse = "This is a simulated streaming response from the AURA system! Your message has been analyzed.".split(" ");
-    let partialText = "";
-
-    for (let i = 0; i < fakeResponse.length; i++) {
-        partialText += (i === 0 ? "" : " ") + fakeResponse[i];
-        res.write(`data: ${JSON.stringify({ chunk: fakeResponse[i] + " " })}\n\n`);
-        await new Promise(r => setTimeout(r, 100)); // artificially slow it down
-    }
-
-    // 4. Save Final AI Message into the same MongoDB Block Document!
-    blockMsg.systemResponse = partialText;
+    // 2. Create a placeholder Message block (empty systemResponse while AI thinks)
+    const blockMsg = new Message({ 
+      sessionId: chatId, 
+      userPrompt: text,
+      systemResponse: '',
+      confidence: { overall: 0, llm: 0, intent: 0, coverage: 0 },
+      biasScore: 0
+    });
     await blockMsg.save();
 
-    // Tell client we are done
+    // 3. Build history for context
+    const recentDocs = await Message.find({ sessionId: chatId }).sort({ timestamp: 1 }).limit(20);
+    const history = buildHistory(recentDocs);
+
+    // 4. Call AI engine (non-streaming for now — simulate token stream from full response)
+    let aiResult;
+    try {
+      aiResult = await callAI({ message: text, sessionId: chatId, history });
+    } catch (aiErr) {
+      res.write(`data: ${JSON.stringify({ error: aiErr.message })}\n\n`);
+      res.write('data: [ERROR]\n\n');
+      res.end();
+      return;
+    }
+
+    // 5. Simulate token streaming from the real AI response
+    const words = aiResult.response.split(' ');
+    let partialText = '';
+    for (let i = 0; i < words.length; i++) {
+      const chunk = (i === 0 ? '' : ' ') + words[i];
+      partialText += chunk;
+      res.write(`data: ${JSON.stringify({ chunk })}\n\n`);
+      await new Promise(r => setTimeout(r, 30)); // ~30ms per word
+    }
+
+    // 6. Map fields and persist the complete block
+    const xaiMapped = (aiResult.xai_data?.shap_tokens || []).map(t => ({
+      word:   t.token,
+      impact: Math.round(Math.abs(t.score) * 100),
+      risk:   0,
+      label:  Math.abs(t.score) > 0.3 ? 'high' : Math.abs(t.score) > 0.1 ? 'medium' : 'low'
+    }));
+
+    blockMsg.systemResponse        = aiResult.response;
+    blockMsg.reasoning             = aiResult.reasoning || '';
+    blockMsg.intent                = aiResult.intent    || '';
+    blockMsg.neutralizedResponse   = aiResult.neutralized_response || null;
+    blockMsg.caveat                = aiResult.caveat    || null;
+    blockMsg.reliabilityLabel      = aiResult.reliability?.label || '';
+    blockMsg.factualGrounding      = Math.round((aiResult.reliability?.factual_grounding || 0) * 100);
+    blockMsg.confidence = {
+      overall:  Math.round((aiResult.reliability?.overall            || 0) * 100),
+      llm:      Math.round((aiResult.reliability?.llm_confidence     || 0) * 100),
+      intent:   Math.round((aiResult.reliability?.intent_confidence  || 0) * 100),
+      coverage: Math.round((aiResult.reliability?.factual_grounding  || 0) * 100),
+    };
+    blockMsg.biasScore             = Math.round((aiResult.bias_score?.composite || 0) * 100);
+    blockMsg.xai                   = xaiMapped;
+    blockMsg.contextContributions  = (aiResult.xai_data?.context_contributions || []);
+    await blockMsg.save();
+
+    // 7. Send final metadata so client can update metrics without a refetch
+    res.write(`data: ${JSON.stringify({ done: true, messageId: blockMsg._id, metrics: {
+      confidence:       blockMsg.confidence,
+      biasScore:        blockMsg.biasScore,
+      intent:           blockMsg.intent,
+      reliabilityLabel: blockMsg.reliabilityLabel,
+    }})}\n\n`);
     res.write('data: [DONE]\n\n');
     res.end();
   } catch (err) {
+    console.error('[streamMessage error]', err);
     res.write('data: [ERROR]\n\n');
     res.end();
   }
 };
+
 
 // 9. Get Message Metrics
 exports.getMessageMetrics = async (req, res) => {
